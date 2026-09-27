@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LocalAI Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/lab.css">
+</head>
+<body>
+  <aside class="lab-sidebar">
+    <a class="back-link" href="/">← Chat</a>
+    <div class="lab-brand">LocalAI <span>Lab</span></div>
+    <p>Inspect the model instead of guessing what it learned.</p>
+    <nav>
+      <a href="#overview">Overview</a>
+      <a href="#playground">Playground</a>
+      <a href="#tokens">Tokenizer</a>
+      <a href="#predictions">Predictions</a>
+      <a href="#checkpoints">Checkpoints</a>
+      <a href="#memory">Memory</a>
+      <a href="#knowledge">Knowledge</a>
+      <a href="#evaluation">Evaluation</a>
+    </nav>
+    <div class="privacy-badge">● LOCAL ONLY</div>
+  </aside>
+
+  <main class="lab-main">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">DEVELOPER MODE</div>
+        <h1>Model Lab</h1>
+        <p>Live internals, generation controls, training checkpoints and local intelligence tools.</p>
+      </div>
+      <button id="refreshAll" class="secondary">Refresh</button>
+    </section>
+
+    <section id="overview">
+      <div class="section-title">
+        <h2>Overview</h2>
+        <span>Live model state</span>
+      </div>
+      <div id="metricGrid" class="metric-grid"></div>
+
+      <div class="panel architecture">
+        <div class="panel-head">
+          <h3>Architecture</h3>
+          <span id="architectureLabel">Loading…</span>
+        </div>
+        <div class="architecture-flow">
+          <div>Prompt</div><b>→</b>
+          <div>Tokenizer</div><b>→</b>
+          <div>Embeddings</div><b>→</b>
+          <div id="blocksNode">Transformer × ?</div><b>→</b>
+          <div>Logits</div><b>→</b>
+          <div>Next token</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="playground">
+      <div class="section-title">
+        <h2>Generation Playground</h2>
+        <span>Full inference control</span>
+      </div>
+      <div class="panel">
+        <textarea id="playgroundPrompt" placeholder="Type a prompt…">RAM is a type of</textarea>
+        <div class="control-grid">
+          <label>Mode
+            <select id="mode">
+              <option value="continuation">Base continuation</option>
+              <option value="chat">Chat prompt</option>
+            </select>
+          </label>
+          <label>Temperature <output id="temperatureValue">0.55</output>
+            <input id="temperature" type="range" min="0.05" max="1.5" step="0.05" value="0.55">
+          </label>
+          <label>Top-k <output id="topKValue">30</output>
+            <input id="topK" type="range" min="1" max="100" step="1" value="30">
+          </label>
+          <label>Max tokens
+            <input id="maxTokens" type="number" min="1" max="400" value="100">
+          </label>
+          <label>Repetition penalty
+            <input id="repetitionPenalty" type="number" min="1" max="2" step="0.01" value="1.05">
+          </label>
+          <label>Seed
+            <input id="seed" type="number" value="1337">
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="generateBtn">Generate</button>
+          <button id="clearOutput" class="secondary">Clear</button>
+        </div>
+        <pre id="generationOutput" class="output">Waiting for prompt.</pre>
+        <div id="generationStats" class="tiny-stats"></div>
+      </div>
+    </section>
+
+    <section id="tokens">
+      <div class="section-title">
+        <h2>Tokenizer Visualizer</h2>
+        <span>See exactly what the model receives</span>
+      </div>
+      <div class="panel">
+        <div class="inline-input">
+          <input id="tokenText" value="What is RAM?" placeholder="Text to tokenize">
+          <button id="tokenizeBtn">Tokenize</button>
+        </div>
+        <div id="tokenSummary" class="tiny-stats"></div>
+        <div id="tokenList" class="token-list"></div>
+      </div>
+    </section>
+
+    <section id="predictions">
+      <div class="section-title">
+        <h2>Next-token probabilities</h2>
+        <span>Watch the model choose</span>
+      </div>
+      <div class="panel">
+        <div class="inline-input">
+          <input id="predictionPrompt" value="RAM is" placeholder="Prompt">
+          <button id="predictBtn">Predict</button>
+        </div>
+        <div id="predictionMeta" class="tiny-stats"></div>
+        <div id="predictionList" class="prediction-list"></div>
+      </div>
+    </section>
+
+    <section id="checkpoints">
+      <div class="section-title">
+        <h2>Checkpoint Explorer</h2>
+        <span>Compare training snapshots</span>
+      </div>
+      <div id="checkpointList" class="checkpoint-grid"></div>
+    </section>
+
+    <section id="memory">
+      <div class="section-title">
+        <h2>Local Memory</h2>
+        <span>Persistent facts stored outside model weights</span>
+      </div>
+      <div class="panel">
+        <div class="inline-input">
+          <input id="memoryText" placeholder="e.g. User prefers short answers">
+          <button id="addMemoryBtn">Remember</button>
+        </div>
+        <div id="memoryList" class="stack-list"></div>
+      </div>
+    </section>
+
+    <section id="knowledge">
+      <div class="section-title">
+        <h2>Knowledge Base</h2>
+        <span>Local retrieval layer</span>
+      </div>
+      <div class="panel">
+        <input id="knowledgeTitle" placeholder="Document title">
+        <textarea id="knowledgeContent" placeholder="Paste notes, documentation or reference text…"></textarea>
+        <div class="button-row">
+          <button id="addKnowledgeBtn">Add document</button>
+        </div>
+        <div class="inline-input">
+          <input id="knowledgeQuery" placeholder="Search local knowledge">
+          <button id="searchKnowledgeBtn" class="secondary">Search</button>
+        </div>
+        <div id="knowledgeResults" class="stack-list"></div>
+        <div id="knowledgeList" class="stack-list"></div>
+      </div>
+    </section>
+
+    <section id="evaluation">
+      <div class="section-title">
+        <h2>Evaluation Suite</h2>
+        <span>Same tests, every checkpoint</span>
+      </div>
+      <div class="panel">
+        <button id="runEvalBtn">Run sanity suite</button>
+        <div id="evalResults" class="eval-grid"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>40-feature stack</h2>
+        <span>What the platform now exposes</span>
+      </div>
+      <div id="featureGrid" class="feature-grid"></div>
+    </section>
+  </main>
+
+  <script src="/static/lab.js"></script>
+</body>
+</html>
