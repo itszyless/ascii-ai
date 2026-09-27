@@ -550,3 +550,20 @@ textarea::placeholder { color: #8a8b8f; }
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+
+/* Thinking polish: text-only state, subtler generation caret */
+.thinking-label {
+  gap: 5px;
+}
+
+.thinking-orb {
+  display: none !important;
+}
+
+.streaming-bubble::after {
+  width: 1px;
+  height: .78em;
+  margin-left: 5px;
+  vertical-align: -1px;
+}
