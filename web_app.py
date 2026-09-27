@@ -14,6 +14,7 @@ import torch
 
 from model import LocalAI
 from tokenizer import LocalTokenizer
+from lab_api import register_lab
 
 
 ROOT = Path(__file__).parent
@@ -407,6 +408,30 @@ def rate_message(chat_id, message_id):
         save_store(store)
 
     return jsonify({"ok": True, "rating": rating})
+
+
+def lab_runtime(load=False):
+    if load:
+        load_model()
+
+    path, tokenizer_path, version, chat_tuned = choose_model()
+    return {
+        "model": _model,
+        "tokenizer": _tokenizer,
+        "device": _device,
+        "model_path": _model_path or path,
+        "tokenizer_path": tokenizer_path,
+        "version": version,
+        "chat_tuned": chat_tuned,
+    }
+
+
+def lab_store_snapshot():
+    with _store_lock:
+        return load_store()
+
+
+register_lab(app, lab_runtime, lab_store_snapshot)
 
 
 if __name__ == "__main__":
