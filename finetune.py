@@ -1,90 +1,145 @@
-"""Fine-tune LocalAI on conversations without blindly memorizing chat.txt.
+"""Instruction-tune LocalAI v2 on chat.txt.
 
-The file is split into train/validation data by complete conversations.  The
-best validation checkpoint is kept, and training stops when validation no
-longer improves.
+User text is context only. Loss is applied to Assistant response tokens, which
+reduces the tendency to imitate the user's side of the dataset.
 """
 
 from pathlib import Path
 import random
+import re
 import time
 
 import torch
+import torch.nn.functional as F
 
 from model import LocalAI
 from tokenizer import LocalTokenizer
 
 
 CHAT_PATH = Path("data/chat.txt")
-MODEL_PATH = Path("checkpoints/model.pt")
-TOKENIZER_PATH = Path("checkpoints/tokenizer.json")
-OUTPUT_PATH = Path("checkpoints/chat_model.pt")
+MODEL_PATH = Path("checkpoints/model_v2_best.pt")
+FALLBACK_MODEL_PATH = Path("checkpoints/model_v2.pt")
+TOKENIZER_PATH = Path("checkpoints/tokenizer_v2.json")
+OUTPUT_PATH = Path("checkpoints/chat_model_v2.pt")
 
-MAX_STEPS = 500
-BATCH_SIZE = 16
+MAX_STEPS = 1000
+BATCH_SIZE = 12
 LEARNING_RATE = 1e-5
 PRINT_EVERY = 25
 EVAL_EVERY = 25
-EVAL_BATCHES = 20
+EVAL_BATCHES = 30
 VALIDATION_FRACTION = 0.10
-EARLY_STOP_PATIENCE = 4
+EARLY_STOP_PATIENCE = 5
+MIN_IMPROVEMENT = 0.003
 SEED = 1337
 
 
-def split_conversations(text):
-    """Split on User: boundaries so validation examples are genuinely held out."""
-    chunks = []
-    current = []
-
-    for line in text.splitlines():
-        if line.startswith("User:") and current:
-            chunk = "\n".join(current).strip()
-            if "Assistant:" in chunk:
-                chunks.append(chunk + "\n")
-            current = []
-        current.append(line)
-
-    if current:
-        chunk = "\n".join(current).strip()
-        if "User:" in chunk and "Assistant:" in chunk:
-            chunks.append(chunk + "\n")
-
-    if len(chunks) < 20:
-        raise ValueError("chat.txt needs at least 20 User:/Assistant: conversations.")
-
-    rng = random.Random(SEED)
-    rng.shuffle(chunks)
-    val_count = max(1, int(len(chunks) * VALIDATION_FRACTION))
-    return chunks[val_count:], chunks[:val_count]
-
-
-def encode_conversations(conversations, tokenizer):
-    ids = []
-    for conversation in conversations:
-        ids.extend(tokenizer.encode(conversation, add_eos=True))
-    return torch.tensor(ids, dtype=torch.long)
-
-
-def get_batch(data, context_length, device):
-    max_start = len(data) - context_length - 1
-    if max_start < 0:
+def parse_pairs(text):
+    pattern = re.compile(
+        r"User:\s*(.*?)\r?\nAssistant:\s*(.*?)(?=\r?\n\s*\r?\nUser:|\Z)",
+        re.DOTALL,
+    )
+    pairs = []
+    for match in pattern.finditer(text):
+        user = match.group(1).strip()
+        assistant = match.group(2).strip()
+        if user and assistant:
+            pairs.append((user, assistant))
+    if len(pairs) < 20:
         raise ValueError(
-            f"Dataset split needs more than {context_length + 1} tokens."
+            "Could not find at least 20 'User:' / 'Assistant:' examples in chat.txt."
         )
+    return pairs
 
-    starts = torch.randint(0, max_start + 1, (BATCH_SIZE,))
-    x = torch.stack([data[i : i + context_length] for i in starts])
-    y = torch.stack([data[i + 1 : i + context_length + 1] for i in starts])
+
+def split_pairs(pairs):
+    pairs = list(pairs)
+    rng = random.Random(SEED)
+    rng.shuffle(pairs)
+    val_count = max(1, int(len(pairs) * VALIDATION_FRACTION))
+    return pairs[val_count:], pairs[:val_count]
+
+
+def make_example(pair, tokenizer, context_length):
+    user, assistant = pair
+    prompt = f"User: {user}\nAssistant:"
+    response = f" {assistant}\n"
+
+    prompt_ids = tokenizer.encode(prompt)
+    response_ids = tokenizer.encode(response, add_eos=True)
+
+    ids = prompt_ids + response_ids
+    labels = [-100] * len(prompt_ids) + response_ids
+
+    if len(ids) > context_length:
+        # Keep the end: Assistant tokens matter most for instruction tuning.
+        ids = ids[-context_length:]
+        labels = labels[-context_length:]
+
+    if all(label == -100 for label in labels):
+        return None
+
+    return (
+        torch.tensor(ids, dtype=torch.long),
+        torch.tensor(labels, dtype=torch.long),
+    )
+
+
+def build_examples(pairs, tokenizer, context_length):
+    examples = []
+    for pair in pairs:
+        example = make_example(pair, tokenizer, context_length)
+        if example is not None:
+            examples.append(example)
+    if not examples:
+        raise ValueError("No usable chat examples after tokenization.")
+    return examples
+
+
+def get_batch(examples, tokenizer, context_length, device):
+    chosen = random.choices(examples, k=BATCH_SIZE)
+    x = torch.full(
+        (BATCH_SIZE, context_length),
+        tokenizer.pad_id,
+        dtype=torch.long,
+    )
+    y = torch.full(
+        (BATCH_SIZE, context_length),
+        -100,
+        dtype=torch.long,
+    )
+
+    for row, (ids, labels) in enumerate(chosen):
+        length = min(len(ids), context_length)
+        x[row, :length] = ids[:length]
+        y[row, :length] = labels[:length]
+
     return x.to(device), y.to(device)
 
 
+def assistant_loss(model, x, labels):
+    logits, _ = model(x)
+    return F.cross_entropy(
+        logits.reshape(-1, logits.size(-1)),
+        labels.reshape(-1),
+        ignore_index=-100,
+    )
+
+
 @torch.no_grad()
-def evaluate(model, data, context_length, device):
+def evaluate(model, examples, tokenizer, context_length, device, use_bf16):
     model.eval()
     losses = []
     for _ in range(EVAL_BATCHES):
-        x, y = get_batch(data, context_length, device)
-        _, loss = model(x, y)
+        x, labels = get_batch(
+            examples, tokenizer, context_length, device
+        )
+        with torch.autocast(
+            device_type=device.type,
+            dtype=torch.bfloat16,
+            enabled=use_bf16,
+        ):
+            loss = assistant_loss(model, x, labels)
         losses.append(loss.item())
     model.train()
     return sum(losses) / len(losses)
@@ -95,7 +150,7 @@ def save_best(model, config, step, train_loss, val_loss):
         {
             "model_state": model.state_dict(),
             "config": config,
-            "stage": "chat",
+            "stage": "chat_v2",
             "step": step,
             "train_loss": train_loss,
             "val_loss": val_loss,
@@ -105,56 +160,67 @@ def save_best(model, config, step, train_loss, val_loss):
 
 
 def main():
-    if not MODEL_PATH.exists() or not TOKENIZER_PATH.exists():
-        raise FileNotFoundError("Pretrain first with train.py.")
-
+    if not TOKENIZER_PATH.exists():
+        raise FileNotFoundError("Run v2 prepare_data.py first.")
     if not CHAT_PATH.exists():
-        raise FileNotFoundError(
-            "Create data/chat.txt with User:/Assistant: conversations first."
-        )
+        raise FileNotFoundError("Missing data/chat.txt.")
+
+    base_path = MODEL_PATH if MODEL_PATH.exists() else FALLBACK_MODEL_PATH
+    if not base_path.exists():
+        raise FileNotFoundError("Run v2 train.py first.")
 
     tokenizer = LocalTokenizer.load(TOKENIZER_PATH)
-    text = CHAT_PATH.read_text(encoding="utf-8")
-    train_conversations, val_conversations = split_conversations(text)
-    train_data = encode_conversations(train_conversations, tokenizer)
-    val_data = encode_conversations(val_conversations, tokenizer)
+    checkpoint = torch.load(base_path, map_location="cpu", weights_only=False)
+    config = checkpoint["config"]
+
+    pairs = parse_pairs(CHAT_PATH.read_text(encoding="utf-8"))
+    train_pairs, val_pairs = split_pairs(pairs)
+    train_examples = build_examples(
+        train_pairs, tokenizer, config["context_length"]
+    )
+    val_examples = build_examples(
+        val_pairs, tokenizer, config["context_length"]
+    )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint = torch.load(MODEL_PATH, map_location=device, weights_only=False)
-    config = checkpoint["config"]
+    use_bf16 = device.type == "cuda" and torch.cuda.is_bf16_supported()
 
     model = LocalAI(**config).to(device)
     model.load_state_dict(checkpoint["model_state"])
-
     optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=LEARNING_RATE,
-        weight_decay=0.01,
+        model.parameters(), lr=LEARNING_RATE, weight_decay=0.01
     )
 
-    print("=" * 62)
-    print("LocalAI conversational fine-tuning")
-    print("=" * 62)
+    print("=" * 66)
+    print("LocalAI v2 assistant-only fine-tuning")
+    print("=" * 66)
+    print(f"Base checkpoint:     {base_path.name}")
     print(f"Device:              {device}")
-    print(f"Base pretrain step:  {checkpoint.get('step', 'unknown')}")
-    print(f"Train conversations: {len(train_conversations):,}")
-    print(f"Val conversations:   {len(val_conversations):,}")
-    print(f"Train tokens:        {len(train_data):,}")
-    print(f"Val tokens:          {len(val_data):,}")
+    print(f"BF16:                {'yes' if use_bf16 else 'no'}")
+    print(f"Train conversations: {len(train_examples):,}")
+    print(f"Val conversations:   {len(val_examples):,}")
     print(f"Max steps:           {MAX_STEPS:,}")
     print(f"Learning rate:       {LEARNING_RATE:.1e}")
     print()
 
     best_val = float("inf")
-    checks_without_improvement = 0
+    stale_checks = 0
     started = time.time()
 
     model.train()
     for step in range(1, MAX_STEPS + 1):
-        x, y = get_batch(train_data, config["context_length"], device)
-        _, loss = model(x, y)
+        x, labels = get_batch(
+            train_examples, tokenizer, config["context_length"], device
+        )
 
         optimizer.zero_grad(set_to_none=True)
+        with torch.autocast(
+            device_type=device.type,
+            dtype=torch.bfloat16,
+            enabled=use_bf16,
+        ):
+            loss = assistant_loss(model, x, labels)
+
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
@@ -163,38 +229,38 @@ def main():
             rate = step / max(time.time() - started, 1e-6)
             print(
                 f"Step {step:>4}/{MAX_STEPS} | "
-                f"train {loss.item():.4f} | {rate:.2f} steps/s"
+                f"assistant train loss {loss.item():.4f} | {rate:.2f} steps/s"
             )
 
         if step % EVAL_EVERY == 0:
             val_loss = evaluate(
-                model, val_data, config["context_length"], device
+                model,
+                val_examples,
+                tokenizer,
+                config["context_length"],
+                device,
+                use_bf16,
             )
-            print(f"  validation loss: {val_loss:.4f}")
+            print(f"  assistant validation loss: {val_loss:.4f}")
 
-            if val_loss < best_val - 0.005:
+            if val_loss < best_val - MIN_IMPROVEMENT:
                 best_val = val_loss
-                checks_without_improvement = 0
+                stale_checks = 0
                 save_best(model, config, step, loss.item(), val_loss)
                 print("  new best chat checkpoint saved")
             else:
-                checks_without_improvement += 1
+                stale_checks += 1
                 print(
                     f"  no meaningful improvement "
-                    f"({checks_without_improvement}/{EARLY_STOP_PATIENCE})"
+                    f"({stale_checks}/{EARLY_STOP_PATIENCE})"
                 )
-
-                if checks_without_improvement >= EARLY_STOP_PATIENCE:
-                    print("  early stopping: validation stopped improving")
+                if stale_checks >= EARLY_STOP_PATIENCE:
+                    print("  early stopping")
                     break
 
-    if not OUTPUT_PATH.exists():
-        val_loss = evaluate(model, val_data, config["context_length"], device)
-        save_best(model, config, step, loss.item(), val_loss)
-
     print()
-    print(f"Best validation loss: {best_val:.4f}")
-    print(f"Best chat checkpoint: {OUTPUT_PATH}")
+    print(f"Best assistant validation loss: {best_val:.4f}")
+    print(f"Chat checkpoint: {OUTPUT_PATH}")
     print("Run: py -3.12 chat.py")
 
 
