@@ -191,7 +191,6 @@ function addThinking() {
   row.innerHTML = `
     <div class="message-content">
       <div class="thinking-label" aria-live="polite">
-        <span class="thinking-orb"></span>
         <span class="thinking-text">Thinking</span>
         <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
       </div>
