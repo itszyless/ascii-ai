@@ -13,14 +13,14 @@ const statusSub = document.getElementById("statusSub");
 const sidebar = document.getElementById("sidebar");
 
 const icons = {
-  copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>',
-  up: '<svg viewBox="0 0 24 24"><path d="M7 10v10H4V10h3Zm3 10h7.2a2 2 0 0 0 1.9-1.37l2-6A2 2 0 0 0 19.2 10H15l.7-3.5A2.1 2.1 0 0 0 13.64 4H13l-4 6v10Z"/></svg>',
-  down: '<svg viewBox="0 0 24 24"><path d="M7 14V4H4v10h3Zm3-10h7.2a2 2 0 0 1 1.9 1.37l2 6A2 2 0 0 1 19.2 14H15l.7 3.5A2.1 2.1 0 0 1 13.64 20H13l-4-6V4Z"/></svg>',
-  share: '<svg viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
-  download: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>',
-  speak: '<svg viewBox="0 0 24 24"><path d="M5 10v4h4l5 4V6l-5 4H5Z"/><path d="M17 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10"/></svg>',
-  regen: '<svg viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M19 11a7 7 0 1 0 .2 5"/></svg>',
-  more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>'
+  copy: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>',
+  check: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>',
+  up: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 10v10H4V10h3Zm3 10h7.2a2 2 0 0 0 1.9-1.37l2-6A2 2 0 0 0 19.2 10H15l.7-3.5A2.1 2.1 0 0 0 13.64 4H13l-4 6v10Z"/></svg>',
+  down: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 14V4H4v10h3Zm3-10h7.2a2 2 0 0 1 1.9 1.37l2 6A2 2 0 0 1 19.2 14H15l.7 3.5A2.1 2.1 0 0 1 13.64 20H13l-4-6V4Z"/></svg>',
+  share: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
+  download: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>',
+  speak: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 10v4h4l5 4V6l-5 4H5Z"/><path d="M17 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10"/></svg>',
+  regen: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M19 11a7 7 0 1 0 .2 5"/></svg>'
 };
 
 async function api(url, options = {}) {
@@ -39,21 +39,29 @@ function escapeHtml(value) {
 
 function renderSidebar() {
   chatList.innerHTML = "";
+
   if (!state.chats.length) {
     chatList.innerHTML = '<div class="empty-chats">No chats yet</div>';
     return;
   }
+
   for (const chat of state.chats) {
     const row = document.createElement("div");
     row.className = "chat-item" + (chat.id === state.activeChatId ? " active" : "");
+
     const open = document.createElement("button");
     open.className = "chat-open";
     open.textContent = chat.title;
     open.onclick = () => openChat(chat.id);
+
     const del = document.createElement("button");
     del.className = "chat-delete";
     del.textContent = "×";
-    del.onclick = async e => { e.stopPropagation(); await deleteChat(chat.id); };
+    del.onclick = async event => {
+      event.stopPropagation();
+      await deleteChat(chat.id);
+    };
+
     row.append(open, del);
     chatList.appendChild(row);
   }
@@ -64,19 +72,26 @@ function actionButton(icon, title, fn) {
   button.className = "response-action";
   button.type = "button";
   button.title = title;
+  button.setAttribute("aria-label", title);
   button.innerHTML = icons[icon];
   button.onclick = fn;
   return button;
 }
 
-function addActions(row, message) {
+function addActions(contentWrap, message, messageRow) {
   const bar = document.createElement("div");
   bar.className = "response-actions";
 
   const copy = actionButton("copy", "Copy", async () => {
     await navigator.clipboard.writeText(message.content);
-    copy.classList.add("done");
-    setTimeout(() => copy.classList.remove("done"), 800);
+    copy.innerHTML = icons.check;
+    copy.title = "Copied";
+    copy.setAttribute("aria-label", "Copied");
+    setTimeout(() => {
+      copy.innerHTML = icons.copy;
+      copy.title = "Copy";
+      copy.setAttribute("aria-label", "Copy");
+    }, 900);
   });
 
   const up = actionButton("up", "Good response", async () => {
@@ -95,7 +110,9 @@ function addActions(row, message) {
 
   const share = actionButton("share", "Share", async () => {
     if (navigator.share) {
-      try { await navigator.share({ text: message.content }); } catch {}
+      try {
+        await navigator.share({ text: message.content });
+      } catch {}
     } else {
       await navigator.clipboard.writeText(message.content);
     }
@@ -116,49 +133,38 @@ function addActions(row, message) {
     speechSynthesis.speak(new SpeechSynthesisUtterance(message.content));
   });
 
-  const regen = actionButton("regen", "Regenerate response", regenerateResponse);
-
-  const moreWrap = document.createElement("div");
-  moreWrap.className = "more-wrap";
-  const more = actionButton("more", "More", () => {
-    moreWrap.classList.toggle("open");
+  const regen = actionButton("regen", "Regenerate response", async () => {
+    await regenerateResponse(message.id, messageRow);
   });
-  const menu = document.createElement("div");
-  menu.className = "more-menu";
-  const branch = document.createElement("button");
-  branch.textContent = "Branch in new chat";
-  branch.onclick = async () => {
-    const result = await api(`/api/chats/${state.activeChatId}/branch`, {
-      method: "POST",
-      body: JSON.stringify({ message_id: message.id }),
-    });
-    await refreshChats();
-    await openChat(result.id);
-  };
-  menu.appendChild(branch);
-  moreWrap.append(more, menu);
 
   if (message.rating === "up") up.classList.add("selected");
   if (message.rating === "down") down.classList.add("selected");
 
-  bar.append(copy, up, down, share, download, speak, regen, moreWrap);
-  row.appendChild(bar);
+  bar.append(copy, up, down, share, download, speak, regen);
+  contentWrap.appendChild(bar);
 }
 
 function addMessageToDom(role, content, message = null) {
   welcome.style.display = "none";
+
   const row = document.createElement("div");
   row.className = `message ${role}`;
+  if (message?.id) row.dataset.messageId = message.id;
 
   const contentWrap = document.createElement("div");
   contentWrap.className = "message-content";
+
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.innerHTML = escapeHtml(content);
   contentWrap.appendChild(bubble);
 
-  if (role === "assistant" && message) addActions(contentWrap, message);
   row.appendChild(contentWrap);
+
+  if (role === "assistant" && message) {
+    addActions(contentWrap, message, row);
+  }
+
   messages.appendChild(row);
   scrollBottom();
   return row;
@@ -166,12 +172,15 @@ function addMessageToDom(role, content, message = null) {
 
 function renderMessages(chat) {
   messages.innerHTML = "";
-  const has = chat?.messages?.length;
-  welcome.style.display = has ? "none" : "grid";
-  if (!has) return;
+  const hasMessages = chat?.messages?.length;
+  welcome.style.display = hasMessages ? "none" : "grid";
+
+  if (!hasMessages) return;
+
   for (const message of chat.messages) {
     addMessageToDom(message.role, message.content, message);
   }
+
   scrollBottom();
 }
 
@@ -179,15 +188,20 @@ function addThinking() {
   const row = document.createElement("div");
   row.className = "message assistant";
   row.id = "thinking";
-  row.innerHTML = '<div class="bubble"><div class="thinking"><span></span><span></span><span></span></div></div>';
+  row.innerHTML = '<div class="message-content"><div class="bubble"><div class="thinking"><span></span><span></span><span></span></div></div></div>';
   messages.appendChild(row);
   scrollBottom();
 }
 
-function removeThinking() { document.getElementById("thinking")?.remove(); }
+function removeThinking() {
+  document.getElementById("thinking")?.remove();
+}
+
 function scrollBottom() {
   const pane = document.getElementById("conversation");
-  requestAnimationFrame(() => pane.scrollTop = pane.scrollHeight);
+  requestAnimationFrame(() => {
+    pane.scrollTop = pane.scrollHeight;
+  });
 }
 
 async function refreshChats() {
@@ -196,7 +210,11 @@ async function refreshChats() {
 }
 
 async function createChat() {
-  const chat = await api("/api/chats", { method: "POST", body: "{}" });
+  const chat = await api("/api/chats", {
+    method: "POST",
+    body: "{}",
+  });
+
   state.activeChatId = chat.id;
   await refreshChats();
   renderMessages(chat);
@@ -215,31 +233,47 @@ async function openChat(id) {
 
 async function deleteChat(id) {
   await api(`/api/chats/${id}`, { method: "DELETE" });
+
   if (state.activeChatId === id) {
     state.activeChatId = null;
     messages.innerHTML = "";
     welcome.style.display = "grid";
   }
+
   await refreshChats();
 }
 
 async function rateMessage(messageId, rating) {
-  await api(`/api/chats/${state.activeChatId}/messages/${messageId}/rating`, {
-    method: "POST",
-    body: JSON.stringify({ rating }),
-  });
+  await api(
+    `/api/chats/${state.activeChatId}/messages/${messageId}/rating`,
+    {
+      method: "POST",
+      body: JSON.stringify({ rating }),
+    }
+  );
 }
 
-async function regenerateResponse() {
+async function regenerateResponse(messageId, oldRow) {
   if (state.sending || !state.activeChatId) return;
+
   state.sending = true;
+
+  // Remove the old answer immediately so regeneration feels like replacement,
+  // not an additional answer below it.
+  oldRow.remove();
   addThinking();
+
   try {
-    await api(`/api/chats/${state.activeChatId}/regenerate`, { method: "POST", body: "{}" });
+    await api(`/api/chats/${state.activeChatId}/regenerate`, {
+      method: "POST",
+      body: JSON.stringify({ message_id: messageId }),
+    });
+    removeThinking();
     await openChat(state.activeChatId);
   } catch (error) {
     removeThinking();
     alert(error.message);
+    await openChat(state.activeChatId);
   } finally {
     state.sending = false;
   }
@@ -252,20 +286,28 @@ async function sendMessage(text) {
   state.sending = true;
   sendBtn.disabled = true;
   input.disabled = true;
+
   addMessageToDom("user", text);
   addThinking();
 
   try {
-    const result = await api(`/api/chats/${state.activeChatId}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ message: text }),
-    });
+    const result = await api(
+      `/api/chats/${state.activeChatId}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message: text }),
+      }
+    );
+
     removeThinking();
     addMessageToDom("assistant", result.message.content, result.message);
     await refreshChats();
+
     if (result.checkpoint) {
       statusTitle.textContent = result.checkpoint;
-      statusSub.textContent = result.device ? `Running on ${result.device}` : "Loaded";
+      statusSub.textContent = result.device
+        ? `Running on ${result.device}`
+        : "Loaded";
       statusDot.className = "status-dot ready";
     }
   } catch (error) {
@@ -289,7 +331,9 @@ async function checkStatus() {
     const status = await api("/api/status");
     statusDot.className = status.ready ? "status-dot ready" : "status-dot bad";
     statusTitle.textContent = status.checkpoint || "Model not ready";
-    statusSub.textContent = status.chat_tuned ? "Chat model ready" : "Base model only";
+    statusSub.textContent = status.chat_tuned
+      ? "Chat model ready"
+      : "Base model only";
   } catch {
     statusDot.className = "status-dot bad";
     statusTitle.textContent = "Backend unavailable";
@@ -300,6 +344,7 @@ composer.addEventListener("submit", async event => {
   event.preventDefault();
   const text = input.value.trim();
   if (!text || state.sending) return;
+
   input.value = "";
   resizeInput();
   await sendMessage(text);
@@ -316,19 +361,18 @@ input.addEventListener("keydown", event => {
 newChatBtn.onclick = createChat;
 document.getElementById("openSidebar").onclick = () => sidebar.classList.add("open");
 document.getElementById("closeSidebar").onclick = () => sidebar.classList.remove("open");
+
 function closeSidebarOnMobile() {
   if (window.innerWidth <= 760) sidebar.classList.remove("open");
 }
 
-document.addEventListener("click", event => {
-  if (!event.target.closest(".more-wrap")) {
-    document.querySelectorAll(".more-wrap.open").forEach(x => x.classList.remove("open"));
-  }
-});
-
 (async function boot() {
   await checkStatus();
   await refreshChats();
-  if (state.chats.length) await openChat(state.chats[0].id);
-  else input.focus();
+
+  if (state.chats.length) {
+    await openChat(state.chats[0].id);
+  } else {
+    input.focus();
+  }
 })();
