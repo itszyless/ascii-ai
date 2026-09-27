@@ -1,4 +1,4 @@
-"""Interactive sanity test for the LocalAI v3 base model.
+"""Interactive sanity test for the OrcaAI v3 base model.
 
 This is NOT assistant/chat mode. Type sentence beginnings and inspect whether
 the model can continue them coherently.
@@ -37,7 +37,7 @@ def main():
     model.eval()
 
     print("=" * 70)
-    print("LocalAI v3 base sanity test")
+    print("OrcaAI v3 base sanity test")
     print("=" * 70)
     print(f"Checkpoint: {model_path.name}")
     print(f"Step:       {checkpoint.get('step', 'unknown')}")
