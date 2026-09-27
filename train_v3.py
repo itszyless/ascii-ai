@@ -1,4 +1,4 @@
-"""Pretrain LocalAI v3 from random weights.
+"""Pretrain OrcaAI v3 from random weights.
 
 v3 deliberately trains on hundreds of millions of token positions instead of
 trying to turn a barely-trained base model into a chatbot.
@@ -202,7 +202,7 @@ def main():
     total_positions = TRAINING_STEPS * tokens_per_step
 
     print("=" * 70)
-    print("LocalAI v3 pretraining")
+    print("OrcaAI v3 pretraining")
     print("=" * 70)
     print(f"Device:             {device}")
     if device.type == "cuda":
