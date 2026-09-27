@@ -1,2 +1,7 @@
-torch
+# Install CUDA-enabled PyTorch separately for your system.
+# For the current Windows/CUDA setup:
+# py -3.12 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+
 numpy
+tokenizers
+datasets
