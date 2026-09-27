@@ -1,4 +1,4 @@
-"""A small decoder-only Transformer language model built with PyTorch."""
+"""Decoder-only Transformer used by LocalAI."""
 
 import torch
 import torch.nn as nn
@@ -8,47 +8,37 @@ import torch.nn.functional as F
 class CausalSelfAttention(nn.Module):
     def __init__(self, embedding_size, num_heads, context_length, dropout):
         super().__init__()
-
         if embedding_size % num_heads != 0:
             raise ValueError("embedding_size must be divisible by num_heads")
 
         self.num_heads = num_heads
         self.head_size = embedding_size // num_heads
 
-        self.query = nn.Linear(embedding_size, embedding_size, bias=False)
-        self.key = nn.Linear(embedding_size, embedding_size, bias=False)
-        self.value = nn.Linear(embedding_size, embedding_size, bias=False)
-        self.output = nn.Linear(embedding_size, embedding_size)
-
-        self.dropout = nn.Dropout(dropout)
-
-        mask = torch.tril(torch.ones(context_length, context_length))
-        self.register_buffer("causal_mask", mask)
+        self.qkv = nn.Linear(embedding_size, 3 * embedding_size, bias=False)
+        self.projection = nn.Linear(embedding_size, embedding_size)
+        self.dropout = dropout
 
     def forward(self, x):
         batch_size, sequence_length, embedding_size = x.shape
 
-        q = self.query(x)
-        k = self.key(x)
-        v = self.value(x)
+        q, k, v = self.qkv(x).chunk(3, dim=-1)
 
         q = q.view(batch_size, sequence_length, self.num_heads, self.head_size).transpose(1, 2)
         k = k.view(batch_size, sequence_length, self.num_heads, self.head_size).transpose(1, 2)
         v = v.view(batch_size, sequence_length, self.num_heads, self.head_size).transpose(1, 2)
 
-        attention = q @ k.transpose(-2, -1)
-        attention = attention / (self.head_size ** 0.5)
+        out = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            dropout_p=self.dropout if self.training else 0.0,
+            is_causal=True,
+        )
 
-        mask = self.causal_mask[:sequence_length, :sequence_length]
-        attention = attention.masked_fill(mask == 0, float("-inf"))
-
-        attention = F.softmax(attention, dim=-1)
-        attention = self.dropout(attention)
-
-        out = attention @ v
-        out = out.transpose(1, 2).contiguous().view(batch_size, sequence_length, embedding_size)
-
-        return self.dropout(self.output(out))
+        out = out.transpose(1, 2).contiguous().view(
+            batch_size, sequence_length, embedding_size
+        )
+        return self.projection(out)
 
 
 class FeedForward(nn.Module):
@@ -85,7 +75,7 @@ class LocalAI(nn.Module):
     def __init__(
         self,
         vocab_size,
-        context_length=128,
+        context_length=256,
         embedding_size=256,
         num_heads=8,
         num_layers=6,
@@ -111,7 +101,10 @@ class LocalAI(nn.Module):
         )
 
         self.final_norm = nn.LayerNorm(embedding_size)
-        self.output = nn.Linear(embedding_size, vocab_size)
+        self.output = nn.Linear(embedding_size, vocab_size, bias=False)
+
+        # Weight tying: input and output tokens share the same learned table.
+        self.output.weight = self.token_embedding.weight
 
         self.apply(self._init_weights)
 
@@ -133,16 +126,12 @@ class LocalAI(nn.Module):
             )
 
         positions = torch.arange(sequence_length, device=token_ids.device)
-
-        x = self.token_embedding(token_ids)
-        x = x + self.position_embedding(positions)
+        x = self.token_embedding(token_ids) + self.position_embedding(positions)
         x = self.blocks(x)
         x = self.final_norm(x)
-
         logits = self.output(x)
 
         loss = None
-
         if targets is not None:
             loss = F.cross_entropy(
                 logits.reshape(-1, logits.size(-1)),
@@ -152,20 +141,31 @@ class LocalAI(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, token_ids, max_new_tokens, temperature=0.8, top_k=40):
+    def generate(
+        self,
+        token_ids,
+        max_new_tokens=200,
+        temperature=0.8,
+        top_k=50,
+        stop_token_ids=None,
+    ):
+        self.eval()
+
         for _ in range(max_new_tokens):
             context = token_ids[:, -self.context_length :]
             logits, _ = self(context)
-
             logits = logits[:, -1, :] / max(temperature, 1e-5)
 
-            if top_k is not None:
+            if top_k:
                 k = min(top_k, logits.size(-1))
-                values, _ = torch.topk(logits, k)
-                logits[logits < values[:, [-1]]] = float("-inf")
+                cutoff = torch.topk(logits, k).values[:, [-1]]
+                logits = logits.masked_fill(logits < cutoff, float("-inf"))
 
             probabilities = F.softmax(logits, dim=-1)
             next_token = torch.multinomial(probabilities, num_samples=1)
             token_ids = torch.cat((token_ids, next_token), dim=1)
+
+            if stop_token_ids and next_token.item() in stop_token_ids:
+                break
 
         return token_ids
