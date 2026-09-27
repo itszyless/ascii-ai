@@ -1,4 +1,4 @@
-"""Tokenizer trained from scratch on LocalAI's own pretraining corpus."""
+"""Tokenizer trained from scratch on OrcaAI's own pretraining corpus."""
 
 from pathlib import Path
 
