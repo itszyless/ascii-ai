@@ -159,12 +159,6 @@ function addMessageToDom(role, content, message = null) {
     row.appendChild(avatar);
   }
 
-  const avatar = document.createElement("img");
-  avatar.className = "assistant-avatar";
-  avatar.src = "/static/favicon.svg";
-  avatar.alt = "OrcaAI";
-  row.appendChild(avatar);
-
   const contentWrap = document.createElement("div");
   contentWrap.className = "message-content";
 
@@ -240,6 +234,12 @@ async function revealAssistantMessage(message) {
   const row = document.createElement("div");
   row.className = "message assistant answer-reveal";
   if (message?.id) row.dataset.messageId = message.id;
+
+  const avatar = document.createElement("img");
+  avatar.className = "assistant-avatar";
+  avatar.src = "/static/favicon.svg";
+  avatar.alt = "OrcaAI";
+  row.appendChild(avatar);
 
   const contentWrap = document.createElement("div");
   contentWrap.className = "message-content";
