@@ -10,34 +10,24 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         if embedding_size % num_heads != 0:
             raise ValueError("embedding_size must be divisible by num_heads")
-
         self.num_heads = num_heads
         self.head_size = embedding_size // num_heads
-
         self.qkv = nn.Linear(embedding_size, 3 * embedding_size, bias=False)
         self.projection = nn.Linear(embedding_size, embedding_size)
         self.dropout = dropout
 
     def forward(self, x):
-        batch_size, sequence_length, embedding_size = x.shape
-
+        b, t, c = x.shape
         q, k, v = self.qkv(x).chunk(3, dim=-1)
-
-        q = q.view(batch_size, sequence_length, self.num_heads, self.head_size).transpose(1, 2)
-        k = k.view(batch_size, sequence_length, self.num_heads, self.head_size).transpose(1, 2)
-        v = v.view(batch_size, sequence_length, self.num_heads, self.head_size).transpose(1, 2)
-
+        q = q.view(b, t, self.num_heads, self.head_size).transpose(1, 2)
+        k = k.view(b, t, self.num_heads, self.head_size).transpose(1, 2)
+        v = v.view(b, t, self.num_heads, self.head_size).transpose(1, 2)
         out = F.scaled_dot_product_attention(
-            q,
-            k,
-            v,
+            q, k, v,
             dropout_p=self.dropout if self.training else 0.0,
             is_causal=True,
         )
-
-        out = out.transpose(1, 2).contiguous().view(
-            batch_size, sequence_length, embedding_size
-        )
+        out = out.transpose(1, 2).contiguous().view(b, t, c)
         return self.projection(out)
 
 
@@ -82,30 +72,18 @@ class LocalAI(nn.Module):
         dropout=0.1,
     ):
         super().__init__()
-
         self.context_length = context_length
-
         self.token_embedding = nn.Embedding(vocab_size, embedding_size)
         self.position_embedding = nn.Embedding(context_length, embedding_size)
-
-        self.blocks = nn.Sequential(
-            *[
-                TransformerBlock(
-                    embedding_size,
-                    num_heads,
-                    context_length,
-                    dropout,
-                )
-                for _ in range(num_layers)
-            ]
-        )
-
+        self.blocks = nn.Sequential(*[
+            TransformerBlock(
+                embedding_size, num_heads, context_length, dropout
+            )
+            for _ in range(num_layers)
+        ])
         self.final_norm = nn.LayerNorm(embedding_size)
         self.output = nn.Linear(embedding_size, vocab_size, bias=False)
-
-        # Weight tying: input and output tokens share the same learned table.
         self.output.weight = self.token_embedding.weight
-
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
@@ -118,13 +96,11 @@ class LocalAI(nn.Module):
 
     def forward(self, token_ids, targets=None):
         _, sequence_length = token_ids.shape
-
         if sequence_length > self.context_length:
             raise ValueError(
                 f"Sequence length {sequence_length} exceeds context length "
                 f"{self.context_length}"
             )
-
         positions = torch.arange(sequence_length, device=token_ids.device)
         x = self.token_embedding(token_ids) + self.position_embedding(positions)
         x = self.blocks(x)
@@ -137,7 +113,6 @@ class LocalAI(nn.Module):
                 logits.reshape(-1, logits.size(-1)),
                 targets.reshape(-1),
             )
-
         return logits, loss
 
     @torch.no_grad()
@@ -145,16 +120,30 @@ class LocalAI(nn.Module):
         self,
         token_ids,
         max_new_tokens=200,
-        temperature=0.8,
-        top_k=50,
+        temperature=0.35,
+        top_k=20,
         stop_token_ids=None,
+        repetition_penalty=1.08,
     ):
         self.eval()
 
         for _ in range(max_new_tokens):
-            context = token_ids[:, -self.context_length :]
+            context = token_ids[:, -self.context_length:]
             logits, _ = self(context)
-            logits = logits[:, -1, :] / max(temperature, 1e-5)
+            logits = logits[:, -1, :]
+
+            if repetition_penalty and repetition_penalty > 1.0:
+                recent = token_ids[:, -64:]
+                for batch_index in range(token_ids.size(0)):
+                    used = torch.unique(recent[batch_index])
+                    scores = logits[batch_index, used]
+                    logits[batch_index, used] = torch.where(
+                        scores < 0,
+                        scores * repetition_penalty,
+                        scores / repetition_penalty,
+                    )
+
+            logits = logits / max(temperature, 1e-5)
 
             if top_k:
                 k = min(top_k, logits.size(-1))
