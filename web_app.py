@@ -60,10 +60,7 @@ def load_store():
 def save_store(store):
     DATA_DIR.mkdir(exist_ok=True)
     temp = CHAT_STORE.with_suffix(".tmp")
-    temp.write_text(
-        json.dumps(store, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    temp.write_text(json.dumps(store, indent=2, ensure_ascii=False), encoding="utf-8")
     temp.replace(CHAT_STORE)
 
 
@@ -117,9 +114,7 @@ def load_model():
 
 def build_history_prompt(messages):
     current_user = messages[-1]["content"]
-    current_ids = _tokenizer.encode(
-        f"User: {current_user}\nAssistant:"
-    )
+    current_ids = _tokenizer.encode(f"User: {current_user}\nAssistant:")
 
     if len(current_ids) >= _model.context_length:
         return current_ids[-_model.context_length:]
@@ -138,9 +133,7 @@ def build_history_prompt(messages):
     used = len(current_ids)
 
     for user, assistant in reversed(completed):
-        ids = _tokenizer.encode(
-            f"User: {user}\nAssistant: {assistant}\n"
-        )
+        ids = _tokenizer.encode(f"User: {user}\nAssistant: {assistant}\n")
         if used + len(ids) > _model.context_length:
             break
         selected.append(ids)
@@ -204,6 +197,7 @@ def list_chats():
             "created_at": c["created_at"],
             "updated_at": c["updated_at"],
         } for c in store["chats"]]
+
     chats.sort(key=lambda c: c["updated_at"], reverse=True)
     return jsonify(chats)
 
@@ -213,6 +207,7 @@ def create_chat():
     payload = request.get_json(silent=True) or {}
     title = str(payload.get("title") or "New chat").strip()[:60] or "New chat"
     stamp = now_iso()
+
     chat = {
         "id": uuid.uuid4().hex,
         "title": title,
@@ -220,10 +215,12 @@ def create_chat():
         "updated_at": stamp,
         "messages": [],
     }
+
     with _store_lock:
         store = load_store()
         store["chats"].append(chat)
         save_store(store)
+
     return jsonify(chat), 201
 
 
@@ -232,6 +229,7 @@ def get_chat(chat_id):
     with _store_lock:
         store = load_store()
         chat = find_chat(store, chat_id)
+
     if chat is None:
         return jsonify({"error": "Chat not found"}), 404
     return jsonify(chat)
@@ -243,9 +241,12 @@ def delete_chat(chat_id):
         store = load_store()
         before = len(store["chats"])
         store["chats"] = [c for c in store["chats"] if c["id"] != chat_id]
+
         if len(store["chats"]) == before:
             return jsonify({"error": "Chat not found"}), 404
+
         save_store(store)
+
     return jsonify({"ok": True})
 
 
@@ -297,6 +298,7 @@ def send_message(chat_id):
         chat = find_chat(store, chat_id)
         if chat is None:
             return jsonify({"error": "Chat was deleted"}), 409
+
         chat["messages"].append(assistant_message)
         chat["updated_at"] = now_iso()
         save_store(store)
@@ -311,17 +313,35 @@ def send_message(chat_id):
 
 @app.post("/api/chats/<chat_id>/regenerate")
 def regenerate(chat_id):
+    payload = request.get_json(silent=True) or {}
+    message_id = payload.get("message_id")
+
     with _store_lock:
         store = load_store()
         chat = find_chat(store, chat_id)
         if chat is None:
             return jsonify({"error": "Chat not found"}), 404
-        if not chat["messages"] or chat["messages"][-1]["role"] != "assistant":
-            return jsonify({"error": "Nothing to regenerate"}), 400
 
-        chat["messages"].pop()
-        if not chat["messages"] or chat["messages"][-1]["role"] != "user":
+        index = next(
+            (
+                i for i, message in enumerate(chat["messages"])
+                if message.get("id") == message_id
+            ),
+            None,
+        )
+
+        if index is None:
+            return jsonify({"error": "Response not found"}), 404
+        if chat["messages"][index].get("role") != "assistant":
+            return jsonify({"error": "Selected message is not an assistant response"}), 400
+        if index == 0 or chat["messages"][index - 1].get("role") != "user":
             return jsonify({"error": "Missing original prompt"}), 400
+
+        # Remove the selected answer and anything after it. The user prompt
+        # immediately before it stays and is used again for generation.
+        chat["messages"] = chat["messages"][:index]
+        chat["updated_at"] = now_iso()
+        save_store(store)
         snapshot = list(chat["messages"])
 
     try:
@@ -340,6 +360,9 @@ def regenerate(chat_id):
     with _store_lock:
         store = load_store()
         chat = find_chat(store, chat_id)
+        if chat is None:
+            return jsonify({"error": "Chat was deleted"}), 409
+
         chat["messages"].append(message)
         chat["updated_at"] = now_iso()
         save_store(store)
@@ -351,6 +374,7 @@ def regenerate(chat_id):
 def rate_message(chat_id, message_id):
     payload = request.get_json(silent=True) or {}
     rating = payload.get("rating")
+
     if rating not in ("up", "down", None):
         return jsonify({"error": "Invalid rating"}), 400
 
@@ -359,49 +383,18 @@ def rate_message(chat_id, message_id):
         chat = find_chat(store, chat_id)
         if chat is None:
             return jsonify({"error": "Chat not found"}), 404
-        message = next((m for m in chat["messages"] if m["id"] == message_id), None)
+
+        message = next(
+            (m for m in chat["messages"] if m.get("id") == message_id),
+            None,
+        )
         if message is None:
             return jsonify({"error": "Message not found"}), 404
+
         message["rating"] = rating
         save_store(store)
 
     return jsonify({"ok": True, "rating": rating})
-
-
-@app.post("/api/chats/<chat_id>/branch")
-def branch_chat(chat_id):
-    payload = request.get_json(silent=True) or {}
-    message_id = payload.get("message_id")
-
-    with _store_lock:
-        store = load_store()
-        source = find_chat(store, chat_id)
-        if source is None:
-            return jsonify({"error": "Chat not found"}), 404
-
-        copied = []
-        found = False
-        for message in source["messages"]:
-            copied.append(dict(message))
-            if message["id"] == message_id:
-                found = True
-                break
-
-        if not found:
-            return jsonify({"error": "Message not found"}), 404
-
-        stamp = now_iso()
-        branch = {
-            "id": uuid.uuid4().hex,
-            "title": f"{source['title']} (branch)",
-            "created_at": stamp,
-            "updated_at": stamp,
-            "messages": copied,
-        }
-        store["chats"].append(branch)
-        save_store(store)
-
-    return jsonify(branch), 201
 
 
 if __name__ == "__main__":
