@@ -1,4 +1,4 @@
-"""Small inference-quality layer for LocalAI chat.
+"""Small inference-quality layer for OrcaAI chat.
 
 This does not replace model training. It improves practical chat behavior by:
 - retrieving relevant local memories/knowledge
