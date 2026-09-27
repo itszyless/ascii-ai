@@ -123,7 +123,7 @@ function addActions(contentWrap, message, messageRow) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "localai-response.txt";
+    a.download = "orcaai-response.txt";
     a.click();
     URL.revokeObjectURL(url);
   });
@@ -150,6 +150,20 @@ function addMessageToDom(role, content, message = null) {
   const row = document.createElement("div");
   row.className = `message ${role}`;
   if (message?.id) row.dataset.messageId = message.id;
+
+  if (role === "assistant") {
+    const avatar = document.createElement("img");
+    avatar.className = "assistant-avatar";
+    avatar.src = "/static/favicon.svg";
+    avatar.alt = "OrcaAI";
+    row.appendChild(avatar);
+  }
+
+  const avatar = document.createElement("img");
+  avatar.className = "assistant-avatar";
+  avatar.src = "/static/favicon.svg";
+  avatar.alt = "OrcaAI";
+  row.appendChild(avatar);
 
   const contentWrap = document.createElement("div");
   contentWrap.className = "message-content";
@@ -189,6 +203,7 @@ function addThinking() {
   row.className = "message assistant thinking-row";
   row.id = "thinking";
   row.innerHTML = `
+    <img class="assistant-avatar" src="/static/favicon.svg" alt="OrcaAI">
     <div class="message-content">
       <div class="thinking-label" aria-live="polite">
         <span class="thinking-text">Thinking</span>
