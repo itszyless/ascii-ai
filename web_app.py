@@ -186,9 +186,20 @@ def _decode_candidate(generated, prompt_length):
 
 def generate_reply(messages):
     load_model()
-    prompt_ids = build_history_prompt(messages)
-    tokens = torch.tensor([prompt_ids], dtype=torch.long, device=_device)
     user_prompt = messages[-1]["content"]
+    _, _, _, chat_tuned = choose_model()
+
+    # A raw pretrained checkpoint has never learned the User:/Assistant:
+    # conversation format. Feeding that syntax into a base model makes its
+    # outputs look much worse than the model actually is, so base-mode testing
+    # uses plain continuation instead.
+    if chat_tuned:
+        prompt_ids = build_history_prompt(messages)
+    else:
+        prompt_ids = _tokenizer.encode(user_prompt)
+        prompt_ids = prompt_ids[-_model.context_length:]
+
+    tokens = torch.tensor([prompt_ids], dtype=torch.long, device=_device)
 
     # Small models occasionally collapse into "...", one-word junk, or repeated
     # phrases. Sample a couple of slightly different candidates and rank them.
