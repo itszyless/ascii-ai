@@ -154,7 +154,7 @@ function addMessageToDom(role, content, message = null) {
   if (role === "assistant") {
     const avatar = document.createElement("img");
     avatar.className = "assistant-avatar";
-    avatar.src = "/static/favicon.svg";
+    avatar.src = "/static/favicon.svg?v=orca2";
     avatar.alt = "OrcaAI";
     row.appendChild(avatar);
   }
@@ -197,7 +197,7 @@ function addThinking() {
   row.className = "message assistant thinking-row";
   row.id = "thinking";
   row.innerHTML = `
-    <img class="assistant-avatar" src="/static/favicon.svg" alt="OrcaAI">
+    <img class="assistant-avatar" src="/static/favicon.svg?v=orca2" alt="OrcaAI">
     <div class="message-content">
       <div class="thinking-label" aria-live="polite">
         <span class="thinking-text">Thinking</span>
@@ -237,7 +237,7 @@ async function revealAssistantMessage(message) {
 
   const avatar = document.createElement("img");
   avatar.className = "assistant-avatar";
-  avatar.src = "/static/favicon.svg";
+  avatar.src = "/static/favicon.svg?v=orca2";
   avatar.alt = "OrcaAI";
   row.appendChild(avatar);
 
