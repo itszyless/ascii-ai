@@ -31,6 +31,7 @@ VALIDATION_FRACTION = 0.10
 EARLY_STOP_PATIENCE = 5
 MIN_IMPROVEMENT = 0.003
 TRAIN_LAST_BLOCKS = 3
+MAX_SAME_RESPONSE = 3
 SEED = 1337
 
 
@@ -65,13 +66,27 @@ def parse_conversations(text):
 def rebalance(conversations):
     unique_pairs = []
     seen_pairs = set()
+    response_counts = {}
 
     for conversation in conversations:
         for user, assistant in conversation:
-            key = (normalize(user), normalize(assistant))
+            normalized_user = normalize(user)
+            normalized_assistant = normalize(assistant)
+            key = (normalized_user, normalized_assistant)
+
             if key in seen_pairs:
                 continue
+
+            # Synthetic chat datasets often contain many different greetings
+            # that all map to the exact same answer. A tiny model can otherwise
+            # learn that one high-frequency reply as the safest answer to
+            # everything ("yeah, what's up?" collapse).
+            count = response_counts.get(normalized_assistant, 0)
+            if count >= MAX_SAME_RESPONSE:
+                continue
+
             seen_pairs.add(key)
+            response_counts[normalized_assistant] = count + 1
             unique_pairs.append([(user, assistant)])
 
     multi = []
@@ -232,6 +247,12 @@ def freeze_model(model):
     for parameter in model.parameters():
         parameter.requires_grad = False
 
+    # Keep most of the pretrained language model protected, but let the tied
+    # token/output embedding adapt to the User:/Assistant: format. Freezing it
+    # entirely made the small model much more prone to generic reply collapse.
+    for parameter in model.token_embedding.parameters():
+        parameter.requires_grad = True
+
     for block in list(model.blocks)[-TRAIN_LAST_BLOCKS:]:
         for parameter in block.parameters():
             parameter.requires_grad = True
@@ -313,6 +334,7 @@ def main():
     print(f"Base step:            {checkpoint.get('step', 'unknown')}")
     print(f"Raw conversations:    {len(conversations):,}")
     print(f"Balanced examples:    {len(balanced):,}")
+    print(f"Max same response:    {MAX_SAME_RESPONSE}")
     print(f"Train examples:       {len(train_examples):,}")
     print(f"Validation examples:  {len(val_examples):,}")
     print(f"Context:              {config['context_length']}")
