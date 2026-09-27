@@ -1,4 +1,4 @@
-"""Local web UI for chatting with LocalAI v3 (falls back to v2)."""
+"""Local web UI for chatting with OrcaAI v3 (falls back to v2)."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def load_model():
 
     chosen, tokenizer_path, _, _ = choose_model()
     if chosen is None:
-        raise FileNotFoundError("No compatible LocalAI checkpoint found.")
+        raise FileNotFoundError("No compatible OrcaAI checkpoint found.")
 
     if _model is not None and _model_path == chosen:
         return
@@ -494,6 +494,6 @@ register_lab(app, lab_runtime, lab_store_snapshot)
 
 
 if __name__ == "__main__":
-    print("LocalAI web UI: http://127.0.0.1:5000")
+    print("OrcaAI web UI: http://127.0.0.1:5000")
     print("Chats stay local in data/web_chats.json")
     app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
