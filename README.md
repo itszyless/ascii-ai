@@ -1,181 +1,250 @@
-# LocalAI
+# OrcaAI
 
-LocalAI is an **AI-assisted learning project** that builds and trains a GPT-style language model locally from random weights.
+OrcaAI is a from-scratch GPT-style language model and local AI playground built to understand how modern language models actually work.
 
-No Ollama, no downloaded pretrained model weights, and no hosted LLM is used for inference.
+The model starts from random weights. No Ollama, no downloaded pretrained language-model weights, and no hosted LLM is used for inference.
 
-## What changed
+> **Current status:** OrcaAI v3 is still experimental. The base model is being pretrained locally and is not expected to match frontier assistants.
 
-LocalAI now has a real two-stage language-model pipeline:
+## What makes OrcaAI different
 
-**Pretraining:** general text -> tokenizer + Transformer -> language patterns
+OrcaAI is not a wrapper around another chatbot. The project contains its own tokenizer, decoder-only Transformer, pretraining loop, chat fine-tuning, local web UI, checkpoint system, evaluation tools, memory layer, knowledge retrieval, and developer lab.
 
-**Fine-tuning:** conversations -> pretrained Transformer -> chat behavior
-
-The model is not a database of possible questions and answers. During pretraining it repeatedly predicts the next token. Gradient descent changes the model's parameters so it can learn statistical language patterns and generalize to text that was not literally present in the dataset.
-
-## Architecture
-
-- decoder-only Transformer
-- causal multi-head self-attention
-- learned token + positional embeddings
-- residual connections and LayerNorm
-- GELU feed-forward networks
-- tied input/output embeddings
-- byte-level BPE tokenizer trained from scratch
-- CUDA training
-- validation loss
-- cosine learning-rate decay
-- gradient clipping
-- automatic checkpoints + resume
-- multi-turn terminal chat
-
-## 1. Install data/tokenizer dependencies
-
-Keep your existing CUDA-enabled PyTorch installation.
-
-```powershell
-py -3.12 -m pip install numpy tokenizers datasets
-```
-
-## 2. Prepare real pretraining data
-
-For the first run:
-
-```powershell
-py -3.12 prepare_data.py
-```
-
-This downloads the small WikiText-2 text corpus and trains LocalAI's own 4,096-token byte-level BPE vocabulary from scratch. It does **not** download pretrained model weights.
-
-It creates:
+The core pipeline is:
 
 ```text
-data/train.bin
-data/val.bin
-checkpoints/tokenizer.json
+raw text
+   ↓
+fresh byte-level BPE tokenizer
+   ↓
+decoder-only Transformer
+   ↓
+next-token pretraining
+   ↓
+base checkpoint
+   ↓
+chat fine-tuning
+   ↓
+OrcaAI chat model
 ```
 
-Once the entire pipeline works, a substantially larger WikiText-103 run can be prepared with:
+## OrcaAI v3
+
+The current v3 configuration uses:
+
+- decoder-only Transformer
+- 8 Transformer blocks
+- 8 attention heads
+- 512-dimensional embeddings
+- 512-token context window
+- 8,192-token byte-level BPE vocabulary
+- tied token/input-output embeddings
+- causal self-attention
+- GELU feed-forward networks
+- residual connections and LayerNorm
+- AdamW optimization
+- warmup + cosine learning-rate decay
+- BF16 when supported
+- validation checkpoints
+- automatic resume checkpoints
+- repetition-aware generation
+- local chat fine-tuning
+
+With the current vocabulary this is roughly a 30M-parameter model.
+
+## Training data
+
+The v3 pipeline prepares a fresh tokenizer and training corpus from streamed educational web text.
+
+Default v3 preparation:
+
+```text
+250M training tokens
+5M validation tokens
+8,192-token vocabulary
+```
+
+Prepare it with:
 
 ```powershell
-py -3.12 prepare_data.py --full
+py -3.12 prepare_v3.py
 ```
 
-Do not jump to the full corpus until the small run works.
+No pretrained model weights are downloaded during data preparation.
 
-## 3. Pretrain
+## Pretraining
+
+Start or resume v3 pretraining:
 
 ```powershell
-py -3.12 train.py
+py -3.12 train_v3.py
 ```
 
-The model starts with random weights and learns by predicting the next token across the corpus.
+The run is configured for up to 80,000 steps. A checkpoint is saved regularly, so training can be stopped and resumed later.
 
-Training now reports both training loss and validation loss. A falling validation loss is much more meaningful than memorizing a tiny hand-written file.
+Important files:
 
-Training can resume from a compatible `checkpoints/model.pt`.
+```text
+checkpoints/model_v3.pt
+checkpoints/model_v3_best.pt
+checkpoints/tokenizer_v3.json
+```
 
-## 4. Teach it to chat
+Before chat fine-tuning, test the raw base model:
 
-Pretraining teaches language, but it does not automatically teach the model that it should act like an assistant.
+```powershell
+py -3.12 test_v3.py
+```
 
-Create:
+Useful continuation prompts:
+
+```text
+RAM is a type of
+The CPU is responsible for
+A computer uses memory to
+A function in programming is
+Paris is the capital of
+```
+
+The base should produce coherent and relevant continuations before moving to chat fine-tuning.
+
+## Chat fine-tuning
+
+Once the base model is good enough:
+
+```powershell
+py -3.12 finetune_v3.py
+```
+
+The chat dataset lives at:
 
 ```text
 data/chat.txt
 ```
 
-with varied conversations:
+The fine-tuned checkpoint is saved separately as:
 
 ```text
-User: hey
-Assistant: hey! what's up?
-
-User: what is ram?
-Assistant: RAM is short-term memory that a computer uses for data it needs quickly.
-
-User: bro i dont get it lol
-Assistant: Think of RAM like a desk. Stuff you're actively working with stays on the desk because it's quick to reach.
-
-User: Could you explain that more formally?
-Assistant: RAM temporarily stores data and instructions that active programs need to access quickly.
+checkpoints/chat_model_v3.pt
 ```
 
-These are **examples of behavior**, not a list of every possible question.
+This means fine-tuning never overwrites the pretrained base checkpoint.
 
-Then run:
+## Web app
+
+Start OrcaAI locally:
 
 ```powershell
-py -3.12 finetune.py
+py -3.12 web_app.py
 ```
 
-This starts from the knowledge learned during pretraining and saves `checkpoints/chat_model.pt`.
+Then open:
 
-## 5. Talk to it
+```text
+http://127.0.0.1:5000
+```
+
+The web UI includes chat history, regeneration, ratings, copy/share/download/read-aloud actions, a smooth Thinking state, progressive answer reveal, and local checkpoint status.
+
+The OrcaAI whale mark is used as the favicon and assistant identity.
+
+## Model Lab
+
+Open:
+
+```text
+http://127.0.0.1:5000/lab
+```
+
+The Model Lab exposes model internals and experimental tools, including:
+
+- live checkpoint and model metadata
+- parameter count
+- architecture viewer
+- GPU / VRAM information
+- tokenizer visualization
+- token IDs
+- next-token probabilities
+- prediction entropy
+- generation controls
+- temperature
+- top-k
+- repetition penalty
+- seed control
+- latency
+- tokens per second
+- checkpoint explorer
+- local memories
+- local knowledge documents
+- retrieval search
+- chat statistics
+- feedback statistics
+- repeatable evaluation prompts
+
+## Local memory and knowledge
+
+OrcaAI can store optional local memories and knowledge documents outside the model weights.
+
+These are retrieval layers, not hidden retraining. Relevant local context can be inserted into the model prompt when useful.
+
+Files remain local under `data/`.
+
+## Hardware target
+
+Current development machine:
+
+```text
+NVIDIA GeForce RTX 4060 Ti
+8 GB VRAM
+Windows
+Python 3.12
+CUDA-enabled PyTorch
+```
+
+The architecture is deliberately small enough to experiment with on consumer hardware.
+
+## Install
+
+Install the Python dependencies:
 
 ```powershell
-py -3.12 chat.py
+py -3.12 -m pip install -r requirements.txt
 ```
 
-Then type arbitrary input:
+For the current Windows CUDA setup, PyTorch is installed separately:
+
+```powershell
+py -3.12 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+```
+
+## Repository layout
 
 ```text
-You: bro why does my pc need ram if i already have an ssd lol
-AI: ...
+model.py              Transformer architecture
+tokenizer.py          byte-level BPE tokenizer
+prepare_v3.py         v3 corpus + tokenizer preparation
+train_v3.py           v3 pretraining
+test_v3.py            raw base-model sanity test
+finetune_v3.py        chat fine-tuning
+web_app.py            local Flask chat application
+lab_api.py            Model Lab backend
+quality_layer.py      retrieval + response candidate ranking
+templates/            chat and Lab pages
+static/               UI, OrcaAI icon and frontend code
+data/                 local datasets, chats, memory and knowledge
+checkpoints/          local tokenizer/model checkpoints
 ```
-
-The tokenizer can represent arbitrary UTF-8 text. Whether the model gives a useful answer depends on what it managed to learn during training.
-
-## Data pipeline
-
-```text
-WikiText / future corpora
-        |
-        v
-prepare_data.py
-        |
-        +--> train BPE tokenizer from scratch
-        |
-        +--> data/train.bin
-        +--> data/val.bin
-                 |
-                 v
-              train.py
-                 |
-                 v
-        checkpoints/model.pt
-                 |
-        conversational examples
-                 |
-                 v
-            finetune.py
-                 |
-                 v
-      checkpoints/chat_model.pt
-                 |
-                 v
-              chat.py
-```
-
-## Hardware
-
-Current target:
-
-- NVIDIA GeForce RTX 4060 Ti
-- 8 GB VRAM
-- Windows
-- Python 3.12
-- CUDA-enabled PyTorch
-
-The current model is intentionally small enough to experiment with on consumer hardware.
 
 ## Important reality check
 
-This pipeline implements the same core idea used by GPT-style language models: learn next-token prediction from large amounts of text, then adapt the model for useful interaction.
+OrcaAI implements the same broad learning idea used by GPT-style models: predict the next token across large amounts of text, then perform post-training for useful interaction.
 
-Scale matters enormously. A small model trained on a 4060 Ti will not approach frontier systems such as ChatGPT. The purpose here is to build the real mechanism rather than fake intelligence with hardcoded responses.
+Scale matters enormously. A roughly 30M-parameter model trained on one consumer GPU will not approach ChatGPT-class systems. The point of OrcaAI is to build and inspect the mechanism itself rather than disguise an API call as a custom AI.
 
-## AI-assisted development
+## Privacy
 
-AI is used to explain concepts, debug code, and help implement this educational project. LocalAI itself runs from its own locally trained weights.
+Inference is performed by OrcaAI's own local weights. Chat history, memory and local knowledge are stored on the machine.
+
+## Project status
+
+OrcaAI is actively being developed. Model quality will change as v3 receives more pretraining and improved post-training.
