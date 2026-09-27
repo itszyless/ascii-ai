@@ -1,4 +1,4 @@
-"""Developer Lab API for LocalAI.
+"""Developer Lab API for OrcaAI.
 
 Everything stays local. The lab exposes model internals, tokenization,
 generation controls, checkpoint info, lightweight memory/knowledge tools,
