@@ -1,4 +1,4 @@
-"""Chat fine-tuning for a successfully pretrained LocalAI v3 base.
+"""Chat fine-tuning for a successfully pretrained OrcaAI v3 base.
 
 Do not run this until test_v3.py produces coherent language.
 """
@@ -328,7 +328,7 @@ def main():
     )
 
     print("=" * 70)
-    print("LocalAI v3 chat fine-tuning")
+    print("OrcaAI v3 chat fine-tuning")
     print("=" * 70)
     print(f"Base checkpoint:      {model_path.name}")
     print(f"Base step:            {checkpoint.get('step', 'unknown')}")
