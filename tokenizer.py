@@ -1,43 +1,58 @@
-"""Character-level tokenizer for the first LocalAI Transformer.
+"""Byte-level tokenizer.
 
-This deliberately starts simple: every unique character in the training
-corpus becomes one token. A subword tokenizer can replace this later.
+Every UTF-8 byte is a token. Unlike the old character tokenizer, this has a
+fixed vocabulary and can accept text that never appeared in the training set.
 """
 
 import json
 from pathlib import Path
 
 
-class CharacterTokenizer:
-    def __init__(self, characters):
-        self.characters = list(characters)
-        self.char_to_id = {char: i for i, char in enumerate(self.characters)}
-        self.id_to_char = {i: char for i, char in enumerate(self.characters)}
+class ByteTokenizer:
+    PAD = 256
+    BOS = 257
+    EOS = 258
 
-    @classmethod
-    def from_text(cls, text):
-        return cls(sorted(set(text)))
+    def __init__(self):
+        self.vocab_size = 259
 
-    @property
-    def vocab_size(self):
-        return len(self.characters)
+    def encode(self, text, add_bos=False, add_eos=False):
+        tokens = list(text.encode("utf-8"))
 
-    def encode(self, text):
-        unknown = sorted(set(text) - set(self.char_to_id))
-        if unknown:
-            raise ValueError(f"Tokenizer does not know these characters: {unknown}")
-        return [self.char_to_id[char] for char in text]
+        if add_bos:
+            tokens.insert(0, self.BOS)
+
+        if add_eos:
+            tokens.append(self.EOS)
+
+        return tokens
 
     def decode(self, token_ids):
-        return "".join(self.id_to_char[int(token_id)] for token_id in token_ids)
+        byte_values = [
+            int(token)
+            for token in token_ids
+            if 0 <= int(token) <= 255
+        ]
+        return bytes(byte_values).decode("utf-8", errors="replace")
 
     def save(self, path):
         Path(path).write_text(
-            json.dumps(self.characters, ensure_ascii=False, indent=2),
+            json.dumps(
+                {
+                    "type": "byte",
+                    "vocab_size": self.vocab_size,
+                    "pad": self.PAD,
+                    "bos": self.BOS,
+                    "eos": self.EOS,
+                },
+                indent=2,
+            ),
             encoding="utf-8",
         )
 
     @classmethod
     def load(cls, path):
-        characters = json.loads(Path(path).read_text(encoding="utf-8"))
-        return cls(characters)
+        # The file is kept with checkpoints so future tokenizer versions can
+        # identify how a model was trained.
+        json.loads(Path(path).read_text(encoding="utf-8"))
+        return cls()
