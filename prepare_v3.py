@@ -1,4 +1,4 @@
-"""Prepare LocalAI v3 data from a much larger educational web corpus.
+"""Prepare OrcaAI v3 data from a much larger educational web corpus.
 
 This keeps all v1/v2 files untouched.
 
@@ -137,7 +137,7 @@ def main():
     CHECKPOINT_DIR.mkdir(exist_ok=True)
 
     print("=" * 70)
-    print("LocalAI v3 data preparation")
+    print("OrcaAI v3 data preparation")
     print("=" * 70)
     print(f"Source:          {DATASET_NAME} ({DATASET_CONFIG})")
     print(f"Train target:    {args.train_tokens:,} tokens")
