@@ -1,7 +1,7 @@
-"""Build LocalAI's pretraining dataset and train its tokenizer from scratch.
+"""Prepare the v2 LocalAI pretraining corpus and tokenizer from scratch.
 
-Default: WikiText-2 for a manageable first real pretraining run.
-Use --full for WikiText-103 once the pipeline works.
+v2 intentionally uses separate files so the old experiment and chat.txt stay safe.
+By default it uses WikiText-103 instead of the tiny WikiText-2 smoke-test corpus.
 """
 
 import argparse
@@ -15,9 +15,9 @@ from tokenizer import LocalTokenizer
 
 DATA_DIR = Path("data")
 CHECKPOINT_DIR = Path("checkpoints")
-TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer.json"
-TRAIN_BIN = DATA_DIR / "train.bin"
-VAL_BIN = DATA_DIR / "val.bin"
+TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v2.json"
+TRAIN_BIN = DATA_DIR / "train_v2.bin"
+VAL_BIN = DATA_DIR / "val_v2.bin"
 
 
 def clean_lines(lines):
@@ -41,46 +41,43 @@ def write_tokens(path, texts, tokenizer):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--full",
+        "--small",
         action="store_true",
-        help="Use WikiText-103 instead of the much smaller WikiText-2.",
+        help="Use WikiText-2 only for a quick smoke test instead of the v2 corpus.",
     )
     parser.add_argument(
         "--vocab-size",
         type=int,
-        default=4096,
-        help="Size of the BPE vocabulary trained from scratch.",
+        default=8192,
+        help="BPE vocabulary size. v2 default: 8192.",
     )
     args = parser.parse_args()
 
     DATA_DIR.mkdir(exist_ok=True)
     CHECKPOINT_DIR.mkdir(exist_ok=True)
 
-    config = "wikitext-103-raw-v1" if args.full else "wikitext-2-raw-v1"
+    config = "wikitext-2-raw-v1" if args.small else "wikitext-103-raw-v1"
 
-    print("=" * 62)
-    print("LocalAI data preparation")
-    print("=" * 62)
+    print("=" * 66)
+    print("LocalAI v2 data preparation")
+    print("=" * 66)
     print(f"Dataset: Salesforce/wikitext ({config})")
-    print("Downloading text only. No pretrained model weights are used.")
+    print("Text only; no pretrained model weights are downloaded.")
+    print(f"Tokenizer vocabulary target: {args.vocab_size:,}")
     print()
 
     dataset = load_dataset("Salesforce/wikitext", config)
-
     train_texts = list(clean_lines(dataset["train"]["text"]))
     val_texts = list(clean_lines(dataset["validation"]["text"]))
 
     print(f"Training documents/lines: {len(train_texts):,}")
-    print("Training a byte-level BPE tokenizer from this corpus...")
+    print("Training a fresh byte-level BPE tokenizer...")
 
-    tokenizer = LocalTokenizer.train(
-        train_texts,
-        vocab_size=args.vocab_size,
-    )
+    tokenizer = LocalTokenizer.train(train_texts, vocab_size=args.vocab_size)
     tokenizer.save(TOKENIZER_PATH)
 
-    print(f"Tokenizer vocabulary: {tokenizer.vocab_size:,}")
-    print("Encoding dataset...")
+    print(f"Actual tokenizer vocabulary: {tokenizer.vocab_size:,}")
+    print("Encoding corpus...")
 
     train_tokens = write_tokens(TRAIN_BIN, train_texts, tokenizer)
     val_tokens = write_tokens(VAL_BIN, val_texts, tokenizer)
