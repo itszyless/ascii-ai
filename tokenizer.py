@@ -1,58 +1,66 @@
-"""Byte-level tokenizer.
+"""Tokenizer trained from scratch on LocalAI's own pretraining corpus."""
 
-Every UTF-8 byte is a token. Unlike the old character tokenizer, this has a
-fixed vocabulary and can accept text that never appeared in the training set.
-"""
-
-import json
 from pathlib import Path
 
+from tokenizers import Tokenizer
+from tokenizers.decoders import ByteLevel as ByteLevelDecoder
+from tokenizers.models import BPE
+from tokenizers.pre_tokenizers import ByteLevel
+from tokenizers.trainers import BpeTrainer
 
-class ByteTokenizer:
-    PAD = 256
-    BOS = 257
-    EOS = 258
 
-    def __init__(self):
-        self.vocab_size = 259
+SPECIAL_TOKENS = ["<pad>", "<bos>", "<eos>"]
+
+
+class LocalTokenizer:
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+        self.pad_id = tokenizer.token_to_id("<pad>")
+        self.bos_id = tokenizer.token_to_id("<bos>")
+        self.eos_id = tokenizer.token_to_id("<eos>")
+
+    @property
+    def vocab_size(self):
+        return self.tokenizer.get_vocab_size()
+
+    @classmethod
+    def train(cls, texts, vocab_size=4096):
+        tokenizer = Tokenizer(BPE(unk_token=None))
+        tokenizer.pre_tokenizer = ByteLevel(add_prefix_space=False)
+        tokenizer.decoder = ByteLevelDecoder()
+
+        trainer = BpeTrainer(
+            vocab_size=vocab_size,
+            min_frequency=2,
+            special_tokens=SPECIAL_TOKENS,
+            initial_alphabet=ByteLevel.alphabet(),
+            show_progress=True,
+        )
+
+        tokenizer.train_from_iterator(texts, trainer=trainer)
+        return cls(tokenizer)
 
     def encode(self, text, add_bos=False, add_eos=False):
-        tokens = list(text.encode("utf-8"))
+        ids = self.tokenizer.encode(text).ids
 
         if add_bos:
-            tokens.insert(0, self.BOS)
+            ids.insert(0, self.bos_id)
 
         if add_eos:
-            tokens.append(self.EOS)
+            ids.append(self.eos_id)
 
-        return tokens
+        return ids
 
     def decode(self, token_ids):
-        byte_values = [
-            int(token)
-            for token in token_ids
-            if 0 <= int(token) <= 255
-        ]
-        return bytes(byte_values).decode("utf-8", errors="replace")
+        return self.tokenizer.decode(
+            [int(token) for token in token_ids],
+            skip_special_tokens=True,
+        )
 
     def save(self, path):
-        Path(path).write_text(
-            json.dumps(
-                {
-                    "type": "byte",
-                    "vocab_size": self.vocab_size,
-                    "pad": self.PAD,
-                    "bos": self.BOS,
-                    "eos": self.EOS,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.tokenizer.save(str(path))
 
     @classmethod
     def load(cls, path):
-        # The file is kept with checkpoints so future tokenizer versions can
-        # identify how a model was trained.
-        json.loads(Path(path).read_text(encoding="utf-8"))
-        return cls()
+        return cls(Tokenizer.from_file(str(path)))
