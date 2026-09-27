@@ -1,4 +1,4 @@
-"""Local web UI for chatting with LocalAI v2."""
+"""Local web UI for chatting with LocalAI v3 (falls back to v2)."""
 
 from __future__ import annotations
 
@@ -20,10 +20,15 @@ ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 CHAT_STORE = DATA_DIR / "web_chats.json"
 CHECKPOINT_DIR = ROOT / "checkpoints"
-CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v2.pt"
-BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v2_best.pt"
-FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v2.pt"
-TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v2.json"
+V3_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v3.pt"
+V3_BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v3_best.pt"
+V3_FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v3.pt"
+V3_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v3.json"
+
+V2_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v2.pt"
+V2_BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v2_best.pt"
+V2_FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v2.pt"
+V2_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v2.json"
 
 MAX_NEW_TOKENS = 180
 TEMPERATURE = 0.35
@@ -68,24 +73,30 @@ def find_chat(store, chat_id):
     return next((c for c in store["chats"] if c["id"] == chat_id), None)
 
 
-def choose_model_path():
-    if CHAT_MODEL_PATH.exists():
-        return CHAT_MODEL_PATH
-    if BASE_MODEL_PATH.exists():
-        return BASE_MODEL_PATH
-    if FALLBACK_BASE_PATH.exists():
-        return FALLBACK_BASE_PATH
-    return None
+def choose_model():
+    if V3_CHAT_MODEL_PATH.exists() and V3_TOKENIZER_PATH.exists():
+        return V3_CHAT_MODEL_PATH, V3_TOKENIZER_PATH, "v3", True
+    if V3_BASE_MODEL_PATH.exists() and V3_TOKENIZER_PATH.exists():
+        return V3_BASE_MODEL_PATH, V3_TOKENIZER_PATH, "v3", False
+    if V3_FALLBACK_BASE_PATH.exists() and V3_TOKENIZER_PATH.exists():
+        return V3_FALLBACK_BASE_PATH, V3_TOKENIZER_PATH, "v3", False
+
+    if V2_CHAT_MODEL_PATH.exists() and V2_TOKENIZER_PATH.exists():
+        return V2_CHAT_MODEL_PATH, V2_TOKENIZER_PATH, "v2", True
+    if V2_BASE_MODEL_PATH.exists() and V2_TOKENIZER_PATH.exists():
+        return V2_BASE_MODEL_PATH, V2_TOKENIZER_PATH, "v2", False
+    if V2_FALLBACK_BASE_PATH.exists() and V2_TOKENIZER_PATH.exists():
+        return V2_FALLBACK_BASE_PATH, V2_TOKENIZER_PATH, "v2", False
+
+    return None, None, None, False
 
 
 def load_model():
     global _model, _tokenizer, _device, _model_path
 
-    chosen = choose_model_path()
+    chosen, tokenizer_path, _, _ = choose_model()
     if chosen is None:
-        raise FileNotFoundError("No v2 checkpoint found.")
-    if not TOKENIZER_PATH.exists():
-        raise FileNotFoundError("Missing checkpoints/tokenizer_v2.json")
+        raise FileNotFoundError("No compatible LocalAI checkpoint found.")
 
     if _model is not None and _model_path == chosen:
         return
@@ -100,7 +111,7 @@ def load_model():
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    tokenizer = LocalTokenizer.load(TOKENIZER_PATH)
+    tokenizer = LocalTokenizer.load(tokenizer_path)
     checkpoint = torch.load(chosen, map_location=device, weights_only=False)
     model = LocalAI(**checkpoint["config"]).to(device)
     model.load_state_dict(checkpoint["model_state"])
@@ -178,11 +189,12 @@ def index():
 
 @app.get("/api/status")
 def status():
-    path = choose_model_path()
+    path, tokenizer_path, version, chat_tuned = choose_model()
     return jsonify({
-        "ready": path is not None and TOKENIZER_PATH.exists(),
+        "ready": path is not None and tokenizer_path is not None,
         "checkpoint": path.name if path else None,
-        "chat_tuned": path == CHAT_MODEL_PATH,
+        "chat_tuned": chat_tuned,
+        "version": version,
         "device": str(_device) if _device is not None else "not loaded",
     })
 
