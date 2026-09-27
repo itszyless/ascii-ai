@@ -1,110 +1,181 @@
 # LocalAI
 
-LocalAI is an **AI-assisted learning project** for learning how language models work by building and training one locally from random weights.
+LocalAI is an **AI-assisted learning project** that builds and trains a GPT-style language model locally from random weights.
 
-This is not an Ollama wrapper and it does not download a pretrained language model. The model architecture, training loop, tokenizer, checkpointing and terminal chat are implemented in this repository with PyTorch.
+No Ollama, no downloaded pretrained model weights, and no hosted LLM is used for inference.
 
-## Current version
+## What changed
 
-LocalAI now uses a custom **decoder-only Transformer** with:
+LocalAI now has a real two-stage language-model pipeline:
 
+**Pretraining:** general text -> tokenizer + Transformer -> language patterns
+
+**Fine-tuning:** conversations -> pretrained Transformer -> chat behavior
+
+The model is not a database of possible questions and answers. During pretraining it repeatedly predicts the next token. Gradient descent changes the model's parameters so it can learn statistical language patterns and generalize to text that was not literally present in the dataset.
+
+## Architecture
+
+- decoder-only Transformer
 - causal multi-head self-attention
-- token and positional embeddings
-- residual connections
-- LayerNorm
-- feed-forward networks
-- GPU training with CUDA
-- automatic checkpoints
-- interactive multi-turn terminal chat
-- a byte-level tokenizer that accepts arbitrary UTF-8 user input
+- learned token + positional embeddings
+- residual connections and LayerNorm
+- GELU feed-forward networks
+- tied input/output embeddings
+- byte-level BPE tokenizer trained from scratch
+- CUDA training
+- validation loss
+- cosine learning-rate decay
+- gradient clipping
+- automatic checkpoints + resume
+- multi-turn terminal chat
 
-The byte tokenizer means you can type text the model never saw during training without getting an "unknown character" error. Understanding that text still depends on what the model learned from its training data.
+## 1. Install data/tokenizer dependencies
 
-## AI-assisted learning
+Keep your existing CUDA-enabled PyTorch installation.
 
-AI is used as a learning and development assistant to explain concepts, debug problems and guide implementation. The model itself starts from random weights and is trained locally.
-
-## What this project does not use
-
-- Ollama
-- pretrained language models
-- downloaded model weights
-- hosted LLM APIs for inference
-
-## Quick start
-
-Create a local file called `data/training.txt`. Training data is intentionally ignored by Git.
-
-A simple conversational format is:
-
-```text
-User: hello
-Assistant: hey! how are you?
-
-User: explain what ram is
-Assistant: RAM is short-term working memory used by your computer.
-
-User: bro i dont get it lol
-Assistant: Think of RAM like a desk. The things you're using right now stay on the desk so they're quick to reach.
+```powershell
+py -3.12 -m pip install numpy tokenizers datasets
 ```
 
-Train:
+## 2. Prepare real pretraining data
+
+For the first run:
+
+```powershell
+py -3.12 prepare_data.py
+```
+
+This downloads the small WikiText-2 text corpus and trains LocalAI's own 4,096-token byte-level BPE vocabulary from scratch. It does **not** download pretrained model weights.
+
+It creates:
+
+```text
+data/train.bin
+data/val.bin
+checkpoints/tokenizer.json
+```
+
+Once the entire pipeline works, a substantially larger WikiText-103 run can be prepared with:
+
+```powershell
+py -3.12 prepare_data.py --full
+```
+
+Do not jump to the full corpus until the small run works.
+
+## 3. Pretrain
 
 ```powershell
 py -3.12 train.py
 ```
 
-Chat:
+The model starts with random weights and learns by predicting the next token across the corpus.
+
+Training now reports both training loss and validation loss. A falling validation loss is much more meaningful than memorizing a tiny hand-written file.
+
+Training can resume from a compatible `checkpoints/model.pt`.
+
+## 4. Teach it to chat
+
+Pretraining teaches language, but it does not automatically teach the model that it should act like an assistant.
+
+Create:
+
+```text
+data/chat.txt
+```
+
+with varied conversations:
+
+```text
+User: hey
+Assistant: hey! what's up?
+
+User: what is ram?
+Assistant: RAM is short-term memory that a computer uses for data it needs quickly.
+
+User: bro i dont get it lol
+Assistant: Think of RAM like a desk. Stuff you're actively working with stays on the desk because it's quick to reach.
+
+User: Could you explain that more formally?
+Assistant: RAM temporarily stores data and instructions that active programs need to access quickly.
+```
+
+These are **examples of behavior**, not a list of every possible question.
+
+Then run:
+
+```powershell
+py -3.12 finetune.py
+```
+
+This starts from the knowledge learned during pretraining and saves `checkpoints/chat_model.pt`.
+
+## 5. Talk to it
 
 ```powershell
 py -3.12 chat.py
 ```
 
-Then type anything directly into the terminal:
+Then type arbitrary input:
 
 ```text
-You: yo whats up
+You: bro why does my pc need ram if i already have an ssd lol
 AI: ...
 ```
 
-Use `/clear` to reset conversation history and `/quit` to exit.
+The tokenizer can represent arbitrary UTF-8 text. Whether the model gives a useful answer depends on what it managed to learn during training.
 
-## Project structure
+## Data pipeline
 
 ```text
-LocalAI/
-├── data/
-│   ├── example.txt
-│   └── training.txt       # local / ignored by Git
-├── checkpoints/
-│   ├── tokenizer.json     # generated locally
-│   └── model.pt           # generated locally
-├── tokenizer.py
-├── model.py
-├── train.py
-├── chat.py
-├── requirements.txt
-└── README.md
+WikiText / future corpora
+        |
+        v
+prepare_data.py
+        |
+        +--> train BPE tokenizer from scratch
+        |
+        +--> data/train.bin
+        +--> data/val.bin
+                 |
+                 v
+              train.py
+                 |
+                 v
+        checkpoints/model.pt
+                 |
+        conversational examples
+                 |
+                 v
+            finetune.py
+                 |
+                 v
+      checkpoints/chat_model.pt
+                 |
+                 v
+              chat.py
 ```
-
-## Training data matters
-
-The Transformer does not automatically know English or facts. Training from scratch means its knowledge comes from the data used to train it.
-
-A tiny conversation file is useful for testing the pipeline, but it will mostly be memorized. A useful small language model requires a much larger and more varied corpus. Future versions of this project will add a proper dataset/pretraining pipeline and a learned subword tokenizer.
 
 ## Hardware
 
-Current development/training hardware:
+Current target:
 
 - NVIDIA GeForce RTX 4060 Ti
 - 8 GB VRAM
+- Windows
+- Python 3.12
 - CUDA-enabled PyTorch
 
-The current configuration is intentionally kept small enough for consumer hardware.
+The current model is intentionally small enough to experiment with on consumer hardware.
 
-## Goal
+## Important reality check
 
-The goal is to understand the real components behind GPT-style language models on a practical scale: data, tokenization, attention, Transformer blocks, next-token prediction, optimization, checkpoints and inference.
+This pipeline implements the same core idea used by GPT-style language models: learn next-token prediction from large amounts of text, then adapt the model for useful interaction.
 
-A consumer-trained educational model will not match frontier systems such as ChatGPT, but it can implement and demonstrate the same fundamental language-modeling ideas.
+Scale matters enormously. A small model trained on a 4060 Ti will not approach frontier systems such as ChatGPT. The purpose here is to build the real mechanism rather than fake intelligence with hardcoded responses.
+
+## AI-assisted development
+
+AI is used to explain concepts, debug code, and help implement this educational project. LocalAI itself runs from its own locally trained weights.
