@@ -1,11 +1,11 @@
-"""Conservative assistant-only fine-tuning for LocalAI v2.
+"""Balanced assistant-only fine-tuning for LocalAI v2.
 
-Fixes:
-- true next-token targets
+This version is designed for the current small synthetic chat dataset:
+- true next-token training
 - assistant-only loss
-- exact-conversation deduplication
-- multi-turn support
-- lower LR + shorter max run to reduce catastrophic forgetting
+- deduplicates repeated prompt/answer pairs
+- keeps a smaller set of genuine multi-turn examples
+- freezes most of the pretrained model to reduce catastrophic forgetting
 """
 
 from pathlib import Path
@@ -26,9 +26,9 @@ FALLBACK_MODEL_PATH = Path("checkpoints/model_v2.pt")
 TOKENIZER_PATH = Path("checkpoints/tokenizer_v2.json")
 OUTPUT_PATH = Path("checkpoints/chat_model_v2.pt")
 
-MAX_STEPS = 400
+MAX_STEPS = 300
 BATCH_SIZE = 12
-LEARNING_RATE = 5e-6
+LEARNING_RATE = 1e-5
 PRINT_EVERY = 20
 EVAL_EVERY = 20
 EVAL_BATCHES = 30
@@ -36,47 +36,75 @@ VALIDATION_FRACTION = 0.10
 EARLY_STOP_PATIENCE = 4
 MIN_IMPROVEMENT = 0.003
 SEED = 1337
+TRAIN_LAST_BLOCKS = 2
+
+
+def normalize(text):
+    return " ".join(text.lower().split())
 
 
 def parse_conversations(text):
     blocks = [b.strip() for b in re.split(r"\n\s*\n+", text) if b.strip()]
-    turn_pattern = re.compile(
+    pattern = re.compile(
         r"User:\s*(.*?)\r?\nAssistant:\s*(.*?)(?=\r?\nUser:|\Z)",
         re.DOTALL,
     )
 
     conversations = []
-    seen = set()
-
     for block in blocks:
         turns = []
-        for match in turn_pattern.finditer(block):
+        for match in pattern.finditer(block):
             user = match.group(1).strip()
             assistant = match.group(2).strip()
             if user and assistant:
                 turns.append((user, assistant))
-
         if turns:
-            key = tuple(
-                (u.strip().lower(), a.strip().lower())
-                for u, a in turns
-            )
-            if key not in seen:
-                seen.add(key)
-                conversations.append(turns)
+            conversations.append(turns)
 
     if len(conversations) < 20:
-        raise ValueError("Need at least 20 unique conversations in data/chat.txt.")
-
+        raise ValueError("Need at least 20 conversations in data/chat.txt.")
     return conversations
 
 
-def split_conversations(conversations):
-    conversations = list(conversations)
+def rebalance_conversations(conversations):
+    """Remove repeated turn pairs so common templates do not dominate training."""
+    unique_pairs = []
+    seen_pairs = set()
+
+    for conversation in conversations:
+        for user, assistant in conversation:
+            key = (normalize(user), normalize(assistant))
+            if key not in seen_pairs:
+                seen_pairs.add(key)
+                unique_pairs.append([(user, assistant)])
+
+    unique_multi = []
+    seen_multi = set()
+    for conversation in conversations:
+        if len(conversation) < 2:
+            continue
+        key = tuple((normalize(u), normalize(a)) for u, a in conversation)
+        if key not in seen_multi:
+            seen_multi.add(key)
+            unique_multi.append(conversation)
+
+    # Keep multi-turn teaching, but do not let near-duplicate dialogue templates
+    # overwhelm the unique single-turn knowledge/instruction examples.
     rng = random.Random(SEED)
-    rng.shuffle(conversations)
-    val_count = max(1, int(len(conversations) * VALIDATION_FRACTION))
-    return conversations[val_count:], conversations[:val_count]
+    rng.shuffle(unique_multi)
+    multi_limit = min(len(unique_multi), max(30, len(unique_pairs) // 3))
+    examples = unique_pairs + unique_multi[:multi_limit]
+    rng.shuffle(examples)
+
+    return examples, len(unique_pairs), multi_limit
+
+
+def split_examples(examples):
+    examples = list(examples)
+    rng = random.Random(SEED)
+    rng.shuffle(examples)
+    val_count = max(1, int(len(examples) * VALIDATION_FRACTION))
+    return examples[val_count:], examples[:val_count]
 
 
 def make_example(turns, tokenizer, context_length):
@@ -102,6 +130,7 @@ def make_example(turns, tokenizer, context_length):
     x_ids = token_ids[:-1]
     next_ids = token_ids[1:]
     next_mask = target_mask[1:]
+
     labels = [
         token if train_target else -100
         for token, train_target in zip(next_ids, next_mask)
@@ -154,6 +183,7 @@ def assistant_loss(model, x, labels):
         logits.reshape(-1, logits.size(-1)),
         labels.reshape(-1),
         ignore_index=-100,
+        label_smoothing=0.02,
     )
 
 
@@ -172,6 +202,18 @@ def evaluate(model, examples, tokenizer, context_length, device, use_bf16):
         losses.append(loss.item())
     model.train()
     return sum(losses) / len(losses)
+
+
+def freeze_for_chat_tuning(model):
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+
+    for block in list(model.blocks)[-TRAIN_LAST_BLOCKS:]:
+        for parameter in block.parameters():
+            parameter.requires_grad = True
+
+    for parameter in model.final_norm.parameters():
+        parameter.requires_grad = True
 
 
 def save_best(model, config, step, train_loss, val_loss):
@@ -202,17 +244,16 @@ def main():
     checkpoint = torch.load(base_path, map_location="cpu", weights_only=False)
     config = checkpoint["config"]
 
-    raw_text = CHAT_PATH.read_text(encoding="utf-8")
-    raw_blocks = len([b for b in re.split(r"\n\s*\n+", raw_text) if b.strip()])
-    conversations = parse_conversations(raw_text)
-    removed = raw_blocks - len(conversations)
+    raw = CHAT_PATH.read_text(encoding="utf-8")
+    conversations = parse_conversations(raw)
+    balanced, unique_pairs, kept_multi = rebalance_conversations(conversations)
+    train_raw, val_raw = split_examples(balanced)
 
-    train_conversations, val_conversations = split_conversations(conversations)
     train_examples = build_examples(
-        train_conversations, tokenizer, config["context_length"]
+        train_raw, tokenizer, config["context_length"]
     )
     val_examples = build_examples(
-        val_conversations, tokenizer, config["context_length"]
+        val_raw, tokenizer, config["context_length"]
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -220,21 +261,28 @@ def main():
 
     model = LocalAI(**config).to(device)
     model.load_state_dict(checkpoint["model_state"])
+    freeze_for_chat_tuning(model)
+
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        [p for p in model.parameters() if p.requires_grad],
         lr=LEARNING_RATE,
         weight_decay=0.01,
     )
 
     print("=" * 66)
-    print("LocalAI v2 conservative assistant fine-tuning")
+    print("LocalAI v2 balanced chat fine-tuning")
     print("=" * 66)
     print(f"Base checkpoint:       {base_path.name}")
-    print(f"Unique conversations:  {len(conversations):,}")
-    print(f"Duplicates removed:    {max(removed, 0):,}")
-    print(f"Train conversations:   {len(train_examples):,}")
-    print(f"Val conversations:     {len(val_examples):,}")
-    print(f"Context length:        {config['context_length']} tokens")
+    print(f"Raw conversations:     {len(conversations):,}")
+    print(f"Unique turn pairs:     {unique_pairs:,}")
+    print(f"Multi-turn kept:       {kept_multi:,}")
+    print(f"Train examples:        {len(train_examples):,}")
+    print(f"Validation examples:   {len(val_examples):,}")
+    print(f"Trainable parameters:  {trainable:,} / {total:,}")
+    print(f"Train last blocks:     {TRAIN_LAST_BLOCKS}")
     print(f"Learning rate:         {LEARNING_RATE:.1e}")
     print(f"Max steps:             {MAX_STEPS}")
     print()
@@ -257,7 +305,9 @@ def main():
             loss = assistant_loss(model, x, labels)
 
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(
+            [p for p in model.parameters() if p.requires_grad], 1.0
+        )
         optimizer.step()
 
         if step == 1 or step % PRINT_EVERY == 0:
