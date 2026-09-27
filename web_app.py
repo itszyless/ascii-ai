@@ -15,6 +15,7 @@ import torch
 from model import LocalAI
 from tokenizer import LocalTokenizer
 from lab_api import register_lab
+from quality_layer import retrieve_context, response_quality
 
 
 ROOT = Path(__file__).parent
@@ -35,6 +36,7 @@ MAX_NEW_TOKENS = 180
 TEMPERATURE = 0.35
 TOP_K = 20
 REPETITION_PENALTY = 1.08
+QUALITY_CANDIDATES = 2
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -131,6 +133,18 @@ def build_history_prompt(messages):
     if len(current_ids) >= _model.context_length:
         return current_ids[-_model.context_length:]
 
+    # Optional local retrieval. It only uses memories/documents the user added
+    # on this machine and never calls an external model or API.
+    context_ids = []
+    retrieved = retrieve_context(current_user)
+    if retrieved:
+        context_text = "Relevant local context:\n" + "\n".join(
+            f"- {item}" for item in retrieved
+        ) + "\n"
+        candidate_context = _tokenizer.encode(context_text)
+        if len(candidate_context) + len(current_ids) < _model.context_length:
+            context_ids = candidate_context
+
     completed = []
     pending_user = None
 
@@ -142,7 +156,7 @@ def build_history_prompt(messages):
             pending_user = None
 
     selected = []
-    used = len(current_ids)
+    used = len(context_ids) + len(current_ids)
 
     for user, assistant in reversed(completed):
         ids = _tokenizer.encode(f"User: {user}\nAssistant: {assistant}\n")
@@ -152,35 +166,69 @@ def build_history_prompt(messages):
         used += len(ids)
 
     prompt_ids = []
+    prompt_ids.extend(context_ids)
     for ids in reversed(selected):
         prompt_ids.extend(ids)
     prompt_ids.extend(current_ids)
     return prompt_ids
 
 
-def generate_reply(messages):
-    load_model()
-    prompt_ids = build_history_prompt(messages)
-    tokens = torch.tensor([prompt_ids], dtype=torch.long, device=_device)
-
-    with _generation_lock:
-        generated = _model.generate(
-            tokens,
-            max_new_tokens=MAX_NEW_TOKENS,
-            temperature=TEMPERATURE,
-            top_k=TOP_K,
-            repetition_penalty=REPETITION_PENALTY,
-            stop_token_ids={_tokenizer.eos_id},
-        )
-
-    new_tokens = generated[0, len(prompt_ids):].tolist()
+def _decode_candidate(generated, prompt_length):
+    new_tokens = generated[0, prompt_length:].tolist()
     response = _tokenizer.decode(new_tokens)
 
     for marker in ("\nUser:", "\nAssistant:"):
         if marker in response:
             response = response.split(marker, 1)[0]
 
-    return response.strip() or "..."
+    return response.strip()
+
+
+def generate_reply(messages):
+    load_model()
+    prompt_ids = build_history_prompt(messages)
+    tokens = torch.tensor([prompt_ids], dtype=torch.long, device=_device)
+    user_prompt = messages[-1]["content"]
+
+    # Small models occasionally collapse into "...", one-word junk, or repeated
+    # phrases. Sample a couple of slightly different candidates and rank them.
+    settings = [
+        (TEMPERATURE, TOP_K),
+        (0.50, 35),
+        (0.68, 50),
+    ]
+
+    candidates = []
+
+    with _generation_lock:
+        for index, (temperature, top_k) in enumerate(settings):
+            if index >= QUALITY_CANDIDATES and candidates:
+                best_so_far = max(
+                    response_quality(text, user_prompt)
+                    for text in candidates
+                )
+                if best_so_far >= 3.0:
+                    break
+
+            generated = _model.generate(
+                tokens,
+                max_new_tokens=MAX_NEW_TOKENS,
+                temperature=temperature,
+                top_k=top_k,
+                repetition_penalty=REPETITION_PENALTY,
+                stop_token_ids={_tokenizer.eos_id},
+            )
+            candidates.append(
+                _decode_candidate(generated, len(prompt_ids))
+            )
+
+    best = max(
+        candidates,
+        key=lambda text: response_quality(text, user_prompt),
+        default="",
+    )
+
+    return best or "..."
 
 
 @app.get("/")
