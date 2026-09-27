@@ -1,12 +1,4 @@
-"""Local web UI for chatting with LocalAI v2.
-
-Run after training/fine-tuning:
-    py -3.12 web_app.py
-Then open http://127.0.0.1:5000
-
-Chats are stored locally in data/web_chats.json.
-No messages leave this computer.
-"""
+"""Local web UI for chatting with LocalAI v2."""
 
 from __future__ import annotations
 
@@ -34,8 +26,9 @@ FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v2.pt"
 TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v2.json"
 
 MAX_NEW_TOKENS = 180
-TEMPERATURE = 0.65
-TOP_K = 40
+TEMPERATURE = 0.35
+TOP_K = 20
+REPETITION_PENALTY = 1.08
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -93,21 +86,19 @@ def load_model():
 
     chosen = choose_model_path()
     if chosen is None:
-        raise FileNotFoundError(
-            "No v2 checkpoint found. Finish train.py, then run finetune.py."
-        )
+        raise FileNotFoundError("No v2 checkpoint found.")
     if not TOKENIZER_PATH.exists():
         raise FileNotFoundError("Missing checkpoints/tokenizer_v2.json")
 
     if _model is not None and _model_path == chosen:
         return
 
-    requested_device = os.getenv("LOCALAI_DEVICE", "").strip().lower()
-    if requested_device == "cpu":
+    requested = os.getenv("LOCALAI_DEVICE", "").strip().lower()
+    if requested == "cpu":
         device = torch.device("cpu")
-    elif requested_device == "cuda":
+    elif requested == "cuda":
         if not torch.cuda.is_available():
-            raise RuntimeError("LOCALAI_DEVICE=cuda but CUDA is unavailable.")
+            raise RuntimeError("CUDA requested but unavailable.")
         device = torch.device("cuda")
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -125,10 +116,10 @@ def load_model():
 
 
 def build_history_prompt(messages):
-    """Fit as many recent complete user/assistant turns as possible."""
     current_user = messages[-1]["content"]
-    current_text = f"User: {current_user}\nAssistant:"
-    current_ids = _tokenizer.encode(current_text)
+    current_ids = _tokenizer.encode(
+        f"User: {current_user}\nAssistant:"
+    )
 
     if len(current_ids) >= _model.context_length:
         return current_ids[-_model.context_length:]
@@ -164,17 +155,8 @@ def build_history_prompt(messages):
 
 def generate_reply(messages):
     load_model()
-
-    if _model_path != CHAT_MODEL_PATH:
-        # It still works as a raw LM, but the user should know chat tuning is absent.
-        pass
-
     prompt_ids = build_history_prompt(messages)
-    tokens = torch.tensor(
-        [prompt_ids],
-        dtype=torch.long,
-        device=_device,
-    )
+    tokens = torch.tensor([prompt_ids], dtype=torch.long, device=_device)
 
     with _generation_lock:
         generated = _model.generate(
@@ -182,6 +164,7 @@ def generate_reply(messages):
             max_new_tokens=MAX_NEW_TOKENS,
             temperature=TEMPERATURE,
             top_k=TOP_K,
+            repetition_penalty=REPETITION_PENALTY,
             stop_token_ids={_tokenizer.eos_id},
         )
 
@@ -203,30 +186,24 @@ def index():
 @app.get("/api/status")
 def status():
     path = choose_model_path()
-    return jsonify(
-        {
-            "ready": path is not None and TOKENIZER_PATH.exists(),
-            "checkpoint": path.name if path else None,
-            "chat_tuned": path == CHAT_MODEL_PATH,
-            "device": str(_device) if _device is not None else "not loaded",
-        }
-    )
+    return jsonify({
+        "ready": path is not None and TOKENIZER_PATH.exists(),
+        "checkpoint": path.name if path else None,
+        "chat_tuned": path == CHAT_MODEL_PATH,
+        "device": str(_device) if _device is not None else "not loaded",
+    })
 
 
 @app.get("/api/chats")
 def list_chats():
     with _store_lock:
         store = load_store()
-        chats = [
-            {
-                "id": c["id"],
-                "title": c["title"],
-                "created_at": c["created_at"],
-                "updated_at": c["updated_at"],
-            }
-            for c in store["chats"]
-        ]
-
+        chats = [{
+            "id": c["id"],
+            "title": c["title"],
+            "created_at": c["created_at"],
+            "updated_at": c["updated_at"],
+        } for c in store["chats"]]
     chats.sort(key=lambda c: c["updated_at"], reverse=True)
     return jsonify(chats)
 
@@ -236,7 +213,6 @@ def create_chat():
     payload = request.get_json(silent=True) or {}
     title = str(payload.get("title") or "New chat").strip()[:60] or "New chat"
     stamp = now_iso()
-
     chat = {
         "id": uuid.uuid4().hex,
         "title": title,
@@ -244,12 +220,10 @@ def create_chat():
         "updated_at": stamp,
         "messages": [],
     }
-
     with _store_lock:
         store = load_store()
         store["chats"].append(chat)
         save_store(store)
-
     return jsonify(chat), 201
 
 
@@ -258,7 +232,6 @@ def get_chat(chat_id):
     with _store_lock:
         store = load_store()
         chat = find_chat(store, chat_id)
-
     if chat is None:
         return jsonify({"error": "Chat not found"}), 404
     return jsonify(chat)
@@ -273,7 +246,6 @@ def delete_chat(chat_id):
         if len(store["chats"]) == before:
             return jsonify({"error": "Chat not found"}), 404
         save_store(store)
-
     return jsonify({"ok": True})
 
 
@@ -284,8 +256,6 @@ def send_message(chat_id):
 
     if not content:
         return jsonify({"error": "Message cannot be empty"}), 400
-    if len(content) > 8000:
-        return jsonify({"error": "Message is too long"}), 400
 
     with _store_lock:
         store = load_store()
@@ -302,9 +272,8 @@ def send_message(chat_id):
         chat["messages"].append(user_message)
 
         if chat["title"] == "New chat":
-            chat["title"] = content.replace("\n", " ")[:42]
-            if len(content.replace("\n", " ")) > 42:
-                chat["title"] += "…"
+            clean = content.replace("\n", " ")
+            chat["title"] = clean[:42] + ("…" if len(clean) > 42 else "")
 
         chat["updated_at"] = now_iso()
         save_store(store)
@@ -320,6 +289,7 @@ def send_message(chat_id):
         "role": "assistant",
         "content": reply,
         "created_at": now_iso(),
+        "rating": None,
     }
 
     with _store_lock:
@@ -331,14 +301,107 @@ def send_message(chat_id):
         chat["updated_at"] = now_iso()
         save_store(store)
 
-    return jsonify(
-        {
-            "message": assistant_message,
-            "title": chat["title"],
-            "checkpoint": _model_path.name if _model_path else None,
-            "device": str(_device) if _device else None,
+    return jsonify({
+        "message": assistant_message,
+        "title": chat["title"],
+        "checkpoint": _model_path.name if _model_path else None,
+        "device": str(_device) if _device else None,
+    })
+
+
+@app.post("/api/chats/<chat_id>/regenerate")
+def regenerate(chat_id):
+    with _store_lock:
+        store = load_store()
+        chat = find_chat(store, chat_id)
+        if chat is None:
+            return jsonify({"error": "Chat not found"}), 404
+        if not chat["messages"] or chat["messages"][-1]["role"] != "assistant":
+            return jsonify({"error": "Nothing to regenerate"}), 400
+
+        chat["messages"].pop()
+        if not chat["messages"] or chat["messages"][-1]["role"] != "user":
+            return jsonify({"error": "Missing original prompt"}), 400
+        snapshot = list(chat["messages"])
+
+    try:
+        reply = generate_reply(snapshot)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    message = {
+        "id": uuid.uuid4().hex,
+        "role": "assistant",
+        "content": reply,
+        "created_at": now_iso(),
+        "rating": None,
+    }
+
+    with _store_lock:
+        store = load_store()
+        chat = find_chat(store, chat_id)
+        chat["messages"].append(message)
+        chat["updated_at"] = now_iso()
+        save_store(store)
+
+    return jsonify({"message": message})
+
+
+@app.post("/api/chats/<chat_id>/messages/<message_id>/rating")
+def rate_message(chat_id, message_id):
+    payload = request.get_json(silent=True) or {}
+    rating = payload.get("rating")
+    if rating not in ("up", "down", None):
+        return jsonify({"error": "Invalid rating"}), 400
+
+    with _store_lock:
+        store = load_store()
+        chat = find_chat(store, chat_id)
+        if chat is None:
+            return jsonify({"error": "Chat not found"}), 404
+        message = next((m for m in chat["messages"] if m["id"] == message_id), None)
+        if message is None:
+            return jsonify({"error": "Message not found"}), 404
+        message["rating"] = rating
+        save_store(store)
+
+    return jsonify({"ok": True, "rating": rating})
+
+
+@app.post("/api/chats/<chat_id>/branch")
+def branch_chat(chat_id):
+    payload = request.get_json(silent=True) or {}
+    message_id = payload.get("message_id")
+
+    with _store_lock:
+        store = load_store()
+        source = find_chat(store, chat_id)
+        if source is None:
+            return jsonify({"error": "Chat not found"}), 404
+
+        copied = []
+        found = False
+        for message in source["messages"]:
+            copied.append(dict(message))
+            if message["id"] == message_id:
+                found = True
+                break
+
+        if not found:
+            return jsonify({"error": "Message not found"}), 404
+
+        stamp = now_iso()
+        branch = {
+            "id": uuid.uuid4().hex,
+            "title": f"{source['title']} (branch)",
+            "created_at": stamp,
+            "updated_at": stamp,
+            "messages": copied,
         }
-    )
+        store["chats"].append(branch)
+        save_store(store)
+
+    return jsonify(branch), 201
 
 
 if __name__ == "__main__":
