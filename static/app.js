@@ -186,15 +186,88 @@ function renderMessages(chat) {
 
 function addThinking() {
   const row = document.createElement("div");
-  row.className = "message assistant";
+  row.className = "message assistant thinking-row";
   row.id = "thinking";
-  row.innerHTML = '<div class="message-content"><div class="bubble"><div class="thinking"><span></span><span></span><span></span></div></div></div>';
+  row.innerHTML = `
+    <div class="message-content">
+      <div class="thinking-label" aria-live="polite">
+        <span class="thinking-orb"></span>
+        <span class="thinking-text">Thinking</span>
+        <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
+    </div>`;
   messages.appendChild(row);
   scrollBottom();
 }
 
+async function removeThinkingSmooth() {
+  const row = document.getElementById("thinking");
+  if (!row) return;
+  row.classList.add("thinking-exit");
+  await new Promise(resolve => setTimeout(resolve, 180));
+  row.remove();
+}
+
 function removeThinking() {
   document.getElementById("thinking")?.remove();
+}
+
+function randomThinkingDelay() {
+  return 1000 + Math.floor(Math.random() * 1001);
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function revealAssistantMessage(message) {
+  welcome.style.display = "none";
+
+  const row = document.createElement("div");
+  row.className = "message assistant answer-reveal";
+  if (message?.id) row.dataset.messageId = message.id;
+
+  const contentWrap = document.createElement("div");
+  contentWrap.className = "message-content";
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble streaming-bubble";
+  contentWrap.appendChild(bubble);
+  row.appendChild(contentWrap);
+  messages.appendChild(row);
+
+  const fullText = message.content || "";
+  const total = fullText.length;
+
+  if (!total) {
+    bubble.textContent = "...";
+  } else {
+    const duration = Math.min(1100, Math.max(280, total * 7));
+    const started = performance.now();
+
+    await new Promise(resolve => {
+      function frame(now) {
+        const progress = Math.min(1, (now - started) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const count = Math.max(1, Math.floor(total * eased));
+        bubble.textContent = fullText.slice(0, count);
+        scrollBottom();
+
+        if (progress < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          bubble.textContent = fullText;
+          resolve();
+        }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  bubble.classList.remove("streaming-bubble");
+  addActions(contentWrap, message, row);
+  scrollBottom();
+  return row;
 }
 
 function scrollBottom() {
@@ -264,11 +337,14 @@ async function regenerateResponse(messageId, oldRow) {
   addThinking();
 
   try {
-    await api(`/api/chats/${state.activeChatId}/regenerate`, {
+    const minimumWait = wait(randomThinkingDelay());
+    const requestPromise = api(`/api/chats/${state.activeChatId}/regenerate`, {
       method: "POST",
       body: JSON.stringify({ message_id: messageId }),
     });
-    removeThinking();
+
+    const [result] = await Promise.all([requestPromise, minimumWait]);
+    await removeThinkingSmooth();
     await openChat(state.activeChatId);
   } catch (error) {
     removeThinking();
@@ -291,7 +367,8 @@ async function sendMessage(text) {
   addThinking();
 
   try {
-    const result = await api(
+    const minimumWait = wait(randomThinkingDelay());
+    const requestPromise = api(
       `/api/chats/${state.activeChatId}/messages`,
       {
         method: "POST",
@@ -299,8 +376,9 @@ async function sendMessage(text) {
       }
     );
 
-    removeThinking();
-    addMessageToDom("assistant", result.message.content, result.message);
+    const [result] = await Promise.all([requestPromise, minimumWait]);
+    await removeThinkingSmooth();
+    await revealAssistantMessage(result.message);
     await refreshChats();
 
     if (result.checkpoint) {
