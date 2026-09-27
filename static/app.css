@@ -203,15 +203,16 @@ button { color: inherit; }
 .welcome-logo {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
+  width: 52px;
+  height: 52px;
   margin-bottom: 18px;
-  background: #111;
-  color: #fff;
-  font-weight: 700;
-  box-shadow: 0 7px 22px rgba(0,0,0,.10);
   animation: logoFloat 4s ease-in-out infinite;
+}
+
+.welcome-logo img {
+  width: 52px;
+  height: 52px;
+  display: block;
 }
 
 .welcome h1 {
@@ -566,4 +567,21 @@ textarea::placeholder { color: #8a8b8f; }
   height: .78em;
   margin-left: 5px;
   vertical-align: -1px;
+}
+
+
+.assistant-avatar {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex: 0 0 24px;
+  margin: 7px 10px 0 0;
+}
+
+.message.assistant {
+  align-items: flex-start;
+}
+
+.thinking-row .assistant-avatar {
+  margin-top: 3px;
 }
