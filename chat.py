@@ -1,16 +1,20 @@
-"""Chat with a trained LocalAI checkpoint in the terminal."""
+"""Interactive terminal chat for a trained LocalAI model."""
 
 from pathlib import Path
 
 import torch
 
 from model import LocalAI
-from tokenizer import CharacterTokenizer
+from tokenizer import ByteTokenizer
 
 
 CHECKPOINT_DIR = Path("checkpoints")
 MODEL_PATH = CHECKPOINT_DIR / "model.pt"
 TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer.json"
+
+MAX_NEW_TOKENS = 220
+TEMPERATURE = 0.75
+TOP_K = 50
 
 
 def main():
@@ -20,52 +24,77 @@ def main():
         )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = ByteTokenizer.load(TOKENIZER_PATH)
 
-    tokenizer = CharacterTokenizer.load(TOKENIZER_PATH)
-    checkpoint = torch.load(MODEL_PATH, map_location=device)
-    config = checkpoint["config"]
+    checkpoint = torch.load(
+        MODEL_PATH,
+        map_location=device,
+        weights_only=False,
+    )
 
-    model = LocalAI(**config).to(device)
+    model = LocalAI(**checkpoint["config"]).to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
 
+    print("=" * 58)
     print("LocalAI")
+    print("=" * 58)
     print(f"Running on: {device}")
-    print("Type 'quit' to exit.")
+    if device.type == "cuda":
+        print(f"GPU:        {torch.cuda.get_device_name(0)}")
+    print()
+    print("Write anything you want.")
+    print("Commands: /clear, /quit")
     print()
 
-    while True:
-        user_input = input("You: ").strip()
+    conversation = ""
 
-        if user_input.lower() == "quit":
+    while True:
+        user_input = input("You: ")
+
+        if user_input.strip().lower() in {"/quit", "quit", "exit"}:
             break
 
-        prompt = f"User: {user_input}\nAI:"
-
-        try:
-            prompt_ids = tokenizer.encode(prompt)
-        except ValueError as error:
-            print(f"AI: {error}")
-            print()
+        if user_input.strip().lower() == "/clear":
+            conversation = ""
+            print("Conversation cleared.\n")
             continue
 
-        tokens = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+        # The history is included so the model can see recent turns.
+        conversation += f"User: {user_input}\nAssistant:"
+
+        prompt_ids = tokenizer.encode(conversation)
+        prompt_ids = prompt_ids[-model.context_length :]
+
+        tokens = torch.tensor(
+            [prompt_ids],
+            dtype=torch.long,
+            device=device,
+        )
 
         generated = model.generate(
             tokens,
-            max_new_tokens=160,
-            temperature=0.8,
-            top_k=40,
+            max_new_tokens=MAX_NEW_TOKENS,
+            temperature=TEMPERATURE,
+            top_k=TOP_K,
         )
 
         new_tokens = generated[0, len(prompt_ids) :].tolist()
         response = tokenizer.decode(new_tokens)
 
-        if "\nUser:" in response:
-            response = response.split("\nUser:", 1)[0]
+        # Stop displaying once the model starts inventing the next speaker.
+        for marker in ("\nUser:", "\nAssistant:"):
+            if marker in response:
+                response = response.split(marker, 1)[0]
 
-        print("AI:", response.strip())
-        print()
+        response = response.strip()
+
+        if not response:
+            response = "..."
+
+        print(f"AI: {response}\n")
+
+        conversation += f" {response}\n"
 
 
 if __name__ == "__main__":
