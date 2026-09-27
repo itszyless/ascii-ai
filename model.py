@@ -1,4 +1,4 @@
-"""Decoder-only Transformer used by LocalAI."""
+"""Decoder-only Transformer used by OrcaAI."""
 
 import torch
 import torch.nn as nn
