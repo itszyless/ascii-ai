@@ -1,13 +1,12 @@
-"""Continue a pretrained LocalAI checkpoint on conversational examples.
+"""Fine-tune LocalAI on conversations without blindly memorizing chat.txt.
 
-Put examples in data/chat.txt using:
-User: ...
-Assistant: ...
-
-This stage teaches response format/style; pretraining teaches general language.
+The file is split into train/validation data by complete conversations.  The
+best validation checkpoint is kept, and training stops when validation no
+longer improves.
 """
 
 from pathlib import Path
+import random
 import time
 
 import torch
@@ -21,23 +20,88 @@ MODEL_PATH = Path("checkpoints/model.pt")
 TOKENIZER_PATH = Path("checkpoints/tokenizer.json")
 OUTPUT_PATH = Path("checkpoints/chat_model.pt")
 
-STEPS = 1000
+MAX_STEPS = 500
 BATCH_SIZE = 16
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 1e-5
 PRINT_EVERY = 25
+EVAL_EVERY = 25
+EVAL_BATCHES = 20
+VALIDATION_FRACTION = 0.10
+EARLY_STOP_PATIENCE = 4
+SEED = 1337
+
+
+def split_conversations(text):
+    """Split on User: boundaries so validation examples are genuinely held out."""
+    chunks = []
+    current = []
+
+    for line in text.splitlines():
+        if line.startswith("User:") and current:
+            chunk = "\n".join(current).strip()
+            if "Assistant:" in chunk:
+                chunks.append(chunk + "\n")
+            current = []
+        current.append(line)
+
+    if current:
+        chunk = "\n".join(current).strip()
+        if "User:" in chunk and "Assistant:" in chunk:
+            chunks.append(chunk + "\n")
+
+    if len(chunks) < 20:
+        raise ValueError("chat.txt needs at least 20 User:/Assistant: conversations.")
+
+    rng = random.Random(SEED)
+    rng.shuffle(chunks)
+    val_count = max(1, int(len(chunks) * VALIDATION_FRACTION))
+    return chunks[val_count:], chunks[:val_count]
+
+
+def encode_conversations(conversations, tokenizer):
+    ids = []
+    for conversation in conversations:
+        ids.extend(tokenizer.encode(conversation, add_eos=True))
+    return torch.tensor(ids, dtype=torch.long)
 
 
 def get_batch(data, context_length, device):
     max_start = len(data) - context_length - 1
     if max_start < 0:
         raise ValueError(
-            f"data/chat.txt needs more than {context_length + 1} tokens."
+            f"Dataset split needs more than {context_length + 1} tokens."
         )
 
     starts = torch.randint(0, max_start + 1, (BATCH_SIZE,))
     x = torch.stack([data[i : i + context_length] for i in starts])
     y = torch.stack([data[i + 1 : i + context_length + 1] for i in starts])
     return x.to(device), y.to(device)
+
+
+@torch.no_grad()
+def evaluate(model, data, context_length, device):
+    model.eval()
+    losses = []
+    for _ in range(EVAL_BATCHES):
+        x, y = get_batch(data, context_length, device)
+        _, loss = model(x, y)
+        losses.append(loss.item())
+    model.train()
+    return sum(losses) / len(losses)
+
+
+def save_best(model, config, step, train_loss, val_loss):
+    torch.save(
+        {
+            "model_state": model.state_dict(),
+            "config": config,
+            "stage": "chat",
+            "step": step,
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+        },
+        OUTPUT_PATH,
+    )
 
 
 def main():
@@ -51,7 +115,9 @@ def main():
 
     tokenizer = LocalTokenizer.load(TOKENIZER_PATH)
     text = CHAT_PATH.read_text(encoding="utf-8")
-    encoded = torch.tensor(tokenizer.encode(text, add_eos=True), dtype=torch.long)
+    train_conversations, val_conversations = split_conversations(text)
+    train_data = encode_conversations(train_conversations, tokenizer)
+    val_data = encode_conversations(val_conversations, tokenizer)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(MODEL_PATH, map_location=device, weights_only=False)
@@ -69,16 +135,23 @@ def main():
     print("=" * 62)
     print("LocalAI conversational fine-tuning")
     print("=" * 62)
-    print(f"Device:      {device}")
-    print(f"Chat tokens: {len(encoded):,}")
-    print(f"Steps:       {STEPS:,}")
+    print(f"Device:              {device}")
+    print(f"Base pretrain step:  {checkpoint.get('step', 'unknown')}")
+    print(f"Train conversations: {len(train_conversations):,}")
+    print(f"Val conversations:   {len(val_conversations):,}")
+    print(f"Train tokens:        {len(train_data):,}")
+    print(f"Val tokens:          {len(val_data):,}")
+    print(f"Max steps:           {MAX_STEPS:,}")
+    print(f"Learning rate:       {LEARNING_RATE:.1e}")
     print()
 
-    model.train()
+    best_val = float("inf")
+    checks_without_improvement = 0
     started = time.time()
 
-    for step in range(1, STEPS + 1):
-        x, y = get_batch(encoded, config["context_length"], device)
+    model.train()
+    for step in range(1, MAX_STEPS + 1):
+        x, y = get_batch(train_data, config["context_length"], device)
         _, loss = model(x, y)
 
         optimizer.zero_grad(set_to_none=True)
@@ -87,23 +160,41 @@ def main():
         optimizer.step()
 
         if step == 1 or step % PRINT_EVERY == 0:
-            rate = step / (time.time() - started)
+            rate = step / max(time.time() - started, 1e-6)
             print(
-                f"Step {step:>4}/{STEPS} | Loss {loss.item():.4f} | "
-                f"{rate:.2f} steps/s"
+                f"Step {step:>4}/{MAX_STEPS} | "
+                f"train {loss.item():.4f} | {rate:.2f} steps/s"
             )
 
-    torch.save(
-        {
-            "model_state": model.state_dict(),
-            "config": config,
-            "stage": "chat",
-        },
-        OUTPUT_PATH,
-    )
+        if step % EVAL_EVERY == 0:
+            val_loss = evaluate(
+                model, val_data, config["context_length"], device
+            )
+            print(f"  validation loss: {val_loss:.4f}")
+
+            if val_loss < best_val - 0.005:
+                best_val = val_loss
+                checks_without_improvement = 0
+                save_best(model, config, step, loss.item(), val_loss)
+                print("  new best chat checkpoint saved")
+            else:
+                checks_without_improvement += 1
+                print(
+                    f"  no meaningful improvement "
+                    f"({checks_without_improvement}/{EARLY_STOP_PATIENCE})"
+                )
+
+                if checks_without_improvement >= EARLY_STOP_PATIENCE:
+                    print("  early stopping: validation stopped improving")
+                    break
+
+    if not OUTPUT_PATH.exists():
+        val_loss = evaluate(model, val_data, config["context_length"], device)
+        save_best(model, config, step, loss.item(), val_loss)
 
     print()
-    print(f"Done. Chat checkpoint saved to {OUTPUT_PATH}")
+    print(f"Best validation loss: {best_val:.4f}")
+    print(f"Best chat checkpoint: {OUTPUT_PATH}")
     print("Run: py -3.12 chat.py")
 
 
