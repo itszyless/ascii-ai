@@ -1,0 +1,20 @@
+User: Hello
+AI: Hi! How are you?
+
+User: Hi
+AI: Hey! How are you doing?
+
+User: How are you?
+AI: I'm doing well. How are you?
+
+User: What are you?
+AI: I'm a small language model being trained locally from scratch.
+
+User: Who made you?
+AI: I am part of an educational project for learning how language models work.
+
+User: What is Python?
+AI: Python is a programming language.
+
+User: Goodbye
+AI: Goodbye! Talk to you later.
