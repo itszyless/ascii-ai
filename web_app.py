@@ -1,4 +1,4 @@
-"""Local web UI for chatting with OrcaAI v3 (falls back to v2)."""
+"""Local web UI for OrcaAI. Prefers v4 and falls back to older checkpoints."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from flask import Flask, jsonify, render_template, request
 import torch
 
 from model import LocalAI
+from model_v4 import OrcaAIv4
 from tokenizer import LocalTokenizer
 from lab_api import register_lab
 from quality_layer import retrieve_context, response_quality
@@ -22,6 +23,11 @@ ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 CHAT_STORE = DATA_DIR / "web_chats.json"
 CHECKPOINT_DIR = ROOT / "checkpoints"
+V4_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v4.pt"
+V4_BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v4_best.pt"
+V4_FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v4.pt"
+V4_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v4.json"
+
 V3_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v3.pt"
 V3_BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v3_best.pt"
 V3_FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v3.pt"
@@ -77,6 +83,13 @@ def find_chat(store, chat_id):
 
 
 def choose_model():
+    if V4_CHAT_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
+        return V4_CHAT_MODEL_PATH, V4_TOKENIZER_PATH, "v4", True
+    if V4_BASE_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
+        return V4_BASE_MODEL_PATH, V4_TOKENIZER_PATH, "v4", False
+    if V4_FALLBACK_BASE_PATH.exists() and V4_TOKENIZER_PATH.exists():
+        return V4_FALLBACK_BASE_PATH, V4_TOKENIZER_PATH, "v4", False
+
     if V3_CHAT_MODEL_PATH.exists() and V3_TOKENIZER_PATH.exists():
         return V3_CHAT_MODEL_PATH, V3_TOKENIZER_PATH, "v3", True
     if V3_BASE_MODEL_PATH.exists() and V3_TOKENIZER_PATH.exists():
@@ -97,7 +110,7 @@ def choose_model():
 def load_model():
     global _model, _tokenizer, _device, _model_path
 
-    chosen, tokenizer_path, _, _ = choose_model()
+    chosen, tokenizer_path, version, _ = choose_model()
     if chosen is None:
         raise FileNotFoundError("No compatible OrcaAI checkpoint found.")
 
@@ -116,7 +129,8 @@ def load_model():
 
     tokenizer = LocalTokenizer.load(tokenizer_path)
     checkpoint = torch.load(chosen, map_location=device, weights_only=False)
-    model = LocalAI(**checkpoint["config"]).to(device)
+    model_class = OrcaAIv4 if version == "v4" else LocalAI
+    model = model_class(**checkpoint["config"]).to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
 
