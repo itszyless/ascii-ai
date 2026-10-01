@@ -15,7 +15,11 @@ const renameModal = document.getElementById("renameModal");
 const renameInput = document.getElementById("renameInput");
 const renameSave = document.getElementById("renameSave");
 const renameCancel = document.getElementById("renameCancel");
+const deleteModal = document.getElementById("deleteModal");
+const deleteConfirm = document.getElementById("deleteConfirm");
+const deleteCancel = document.getElementById("deleteCancel");
 let renameChatId = null;
+let deleteChatId = null;
 
 const icons = {
   copy: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>',
@@ -71,11 +75,12 @@ function renderSidebar() {
 
     const del = document.createElement("button");
     del.className = "chat-delete";
-    del.textContent = "×";
     del.title = "Delete chat";
-    del.onclick = async event => {
+    del.setAttribute("aria-label", "Delete chat");
+    del.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg>';
+    del.onclick = event => {
       event.stopPropagation();
-      await deleteChat(chat.id);
+      openDeleteModal(chat.id);
     };
 
     row.append(open, edit, del);
@@ -345,6 +350,34 @@ async function deleteChat(id) {
 
   await refreshChats();
 }
+
+function openDeleteModal(id) {
+  deleteChatId = id;
+  deleteModal.hidden = false;
+}
+
+function closeDeleteModal() {
+  deleteModal.hidden = true;
+  deleteChatId = null;
+}
+
+async function confirmDeleteChat() {
+  if (!deleteChatId) return;
+  const id = deleteChatId;
+  closeDeleteModal();
+  await deleteChat(id);
+}
+
+deleteConfirm.onclick = confirmDeleteChat;
+deleteCancel.onclick = closeDeleteModal;
+deleteModal.addEventListener("click", event => {
+  if (event.target === deleteModal) closeDeleteModal();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !deleteModal.hidden) {
+    closeDeleteModal();
+  }
+});
 
 function openRenameModal(chat) {
   renameChatId = chat.id;
