@@ -14,7 +14,7 @@
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-top">
-        <div class="brand">OrcaAI</div>
+        <div class="brand"><img class="brand-logo" src="/static/favicon.svg?v=orca2" alt=""><span>OrcaAI</span></div>
         <button class="icon-btn mobile-close" id="closeSidebar" title="Close sidebar">×</button>
       </div>
 
@@ -26,17 +26,12 @@
       <div class="chat-section-label">Chats</div>
       <div class="chat-list" id="chatList"></div>
 
-      <a class="lab-link" href="/lab">
-        <span>◇</span>
-        <span>Model Lab</span>
-      </a>
-
       <div class="sidebar-footer">
-        <div class="status-row">
-          <span class="status-dot" id="statusDot"></span>
+        <div class="product-footer">
+          <img class="footer-logo" src="/static/favicon.svg?v=orca2" alt="">
           <div>
-            <div class="status-title" id="statusTitle">Checking model…</div>
-            <div class="status-sub" id="statusSub">Local only</div>
+            <div class="status-title">Orca AI</div>
+            <div class="status-sub">Beta v0.1</div>
           </div>
         </div>
       </div>
@@ -68,6 +63,18 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <div class="modal-backdrop" id="renameModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="renameTitle">
+      <div class="modal-title" id="renameTitle">Rename chat</div>
+      <div class="modal-subtitle">Choose a new name for this conversation.</div>
+      <input class="modal-input" id="renameInput" maxlength="60" autocomplete="off" placeholder="Chat name">
+      <div class="modal-actions">
+        <button class="modal-btn secondary" id="renameCancel" type="button">Cancel</button>
+        <button class="modal-btn primary" id="renameSave" type="button">Save</button>
+      </div>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>
