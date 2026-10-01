@@ -28,7 +28,7 @@ CHECKPOINT_DIR = Path("checkpoints")
 DATA_DIR = Path("data")
 TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v4.json"
 BEST_PATH = CHECKPOINT_DIR / "model_v4_best.pt"
-LATEST_PATH = CHECKPOINT_DIR / "model_v4.pt"
+LATEST_PATH = CHECKPOINT_DIR / "model_v4.pt"\nGROUNDED_PATH = CHECKPOINT_DIR / "model_v4_grounded.pt"
 REPORT_PATH = DATA_DIR / "v4_diagnostic_report.json"
 
 FACT_TESTS = [
