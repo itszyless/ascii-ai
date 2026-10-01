@@ -36,6 +36,19 @@ FACTS = [
     ("What is the capital of Austria?", "Vienna is the capital of Austria."),
     ("What is the capital of Italy?", "Rome is the capital of Italy."),
     ("What is the capital of Japan?", "Tokyo is the capital of Japan."),
+    ("What is the capital of Russia?", "Moscow is the capital of Russia."),
+    ("What is the capital of Spain?", "Madrid is the capital of Spain."),
+    ("What is the capital of Portugal?", "Lisbon is the capital of Portugal."),
+    ("What is the capital of Canada?", "Ottawa is the capital of Canada."),
+    ("What is the capital of Australia?", "Canberra is the capital of Australia."),
+    ("What is the capital of Greece?", "Athens is the capital of Greece."),
+    ("What is the capital of Egypt?", "Cairo is the capital of Egypt."),
+    ("What is the capital of the United States?", "Washington, D.C. is the capital of the United States."),
+    ("What is the capital of the United Kingdom?", "London is the capital of the United Kingdom."),
+    ("What is the capital of China?", "Beijing is the capital of China."),
+    ("What is the capital of India?", "New Delhi is the capital of India."),
+    ("What is the capital of Brazil?", "Brasilia is the capital of Brazil."),
+    ("What is the capital of Mexico?", "Mexico City is the capital of Mexico."),
     ("What is water made of?", "Water is made of hydrogen and oxygen, with the chemical formula H2O."),
     ("What is the chemical formula for water?", "The chemical formula for water is H2O."),
     ("What does the heart pump?", "The heart pumps blood around the body."),
@@ -129,6 +142,14 @@ for a in range(0, 13):
 
 MULTI_TURN = [
     [
+        ("Hey", "Hey! What's up?"),
+        ("who are you", "I'm OrcaAI, a local AI assistant."),
+        ("no, who are you??", "I'm OrcaAI, a local AI assistant running on this computer."),
+        ("whats ram?", "RAM is temporary memory used for data the computer needs quickly."),
+        ("what? i thought you are smart", "I can still make mistakes, but I'll try to answer clearly and accurately."),
+        ("stop it. answer this: whats the capital of russia", "Moscow is the capital of Russia."),
+    ],
+    [
         ("Who are you?", "I'm OrcaAI, a local AI assistant."),
         ("Are you human?", "No. I'm an AI assistant, not a human."),
         ("Really?", "Yes. I'm software, not a human."),
@@ -177,16 +198,50 @@ PROMPT_VARIANTS = [
     "Can you tell me: {q}",
 ]
 
+
+def prompt_forms(question):
+    forms = {
+        question,
+        question.lower(),
+        question.rstrip("?.!"),
+        question.lower().rstrip("?.!"),
+    }
+
+    lower = question.lower()
+    if lower.startswith("what is "):
+        rest = question[8:]
+        forms.add("What's " + rest)
+        forms.add("whats " + rest.lower())
+    if lower.startswith("who are you"):
+        forms.update({"who are you", "who are you?", "who are you??"})
+    if lower.startswith("what is ram"):
+        forms.update({"whats ram?", "what's ram?", "what is ram"})
+    if lower.startswith("what is the capital of russia"):
+        forms.update({
+            "whats the capital of russia",
+            "what's the capital of russia?",
+            "stop it. answer this: whats the capital of russia",
+        })
+
+    return sorted(forms)
+
+
 def build():
     rows = []
 
     def add(question, answer, category):
-        for template in PROMPT_VARIANTS:
-            rows.append({
-                "user": template.format(q=question),
-                "assistant": answer,
-                "category": category,
-            })
+        seen = set()
+        for form in prompt_forms(question):
+            for template in PROMPT_VARIANTS:
+                user = template.format(q=form)
+                if user in seen:
+                    continue
+                seen.add(user)
+                rows.append({
+                    "user": user,
+                    "assistant": answer,
+                    "category": category,
+                })
 
     for q, a in FACTS:
         add(q, a, "fact")
