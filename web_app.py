@@ -39,11 +39,12 @@ V2_BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v2_best.pt"
 V2_FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v2.pt"
 V2_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v2.json"
 
-MAX_NEW_TOKENS = 180
-TEMPERATURE = 0.35
-TOP_K = 20
-REPETITION_PENALTY = 1.08
-QUALITY_CANDIDATES = 2
+MAX_NEW_TOKENS = 100
+TEMPERATURE = 0.45
+TOP_K = 40
+TOP_P = 0.92
+REPETITION_PENALTY = 1.12
+QUALITY_CANDIDATES = 1
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -144,50 +145,14 @@ def load_model():
 
 
 def build_history_prompt(messages):
+    # v4 chat tuning currently uses single-turn instruction examples.
+    # Keeping old turns in the token prompt causes the small model to copy or
+    # blend previous questions, so use only the current user turn for now.
     current_user = messages[-1]["content"]
-    current_ids = _tokenizer.encode(f"User: {current_user}\nAssistant:")
-
-    if len(current_ids) >= _model.context_length:
-        return current_ids[-_model.context_length:]
-
-    # Optional local retrieval. It only uses memories/documents the user added
-    # on this machine and never calls an external model or API.
-    context_ids = []
-    retrieved = retrieve_context(current_user)
-    if retrieved:
-        context_text = "Relevant local context:\n" + "\n".join(
-            f"- {item}" for item in retrieved
-        ) + "\n"
-        candidate_context = _tokenizer.encode(context_text)
-        if len(candidate_context) + len(current_ids) < _model.context_length:
-            context_ids = candidate_context
-
-    completed = []
-    pending_user = None
-
-    for message in messages[:-1]:
-        if message["role"] == "user":
-            pending_user = message["content"]
-        elif message["role"] == "assistant" and pending_user is not None:
-            completed.append((pending_user, message["content"]))
-            pending_user = None
-
-    selected = []
-    used = len(context_ids) + len(current_ids)
-
-    for user, assistant in reversed(completed):
-        ids = _tokenizer.encode(f"User: {user}\nAssistant: {assistant}\n")
-        if used + len(ids) > _model.context_length:
-            break
-        selected.append(ids)
-        used += len(ids)
-
-    prompt_ids = []
-    prompt_ids.extend(context_ids)
-    for ids in reversed(selected):
-        prompt_ids.extend(ids)
-    prompt_ids.extend(current_ids)
-    return prompt_ids
+    prompt_ids = _tokenizer.encode(
+        f"User: {current_user}\nAssistant:"
+    )
+    return prompt_ids[-_model.context_length:]
 
 
 def _decode_candidate(generated, prompt_length):
@@ -220,11 +185,7 @@ def generate_reply(messages):
 
     # Small models occasionally collapse into "...", one-word junk, or repeated
     # phrases. Sample a couple of slightly different candidates and rank them.
-    settings = [
-        (TEMPERATURE, TOP_K),
-        (0.50, 35),
-        (0.68, 50),
-    ]
+    settings = [(TEMPERATURE, TOP_K)]
 
     candidates = []
 
@@ -243,6 +204,7 @@ def generate_reply(messages):
                 max_new_tokens=MAX_NEW_TOKENS,
                 temperature=temperature,
                 top_k=top_k,
+                top_p=TOP_P,
                 repetition_penalty=REPETITION_PENALTY,
                 stop_token_ids={_tokenizer.eos_id},
             )
@@ -322,6 +284,27 @@ def get_chat(chat_id):
     if chat is None:
         return jsonify({"error": "Chat not found"}), 404
     return jsonify(chat)
+
+
+@app.patch("/api/chats/<chat_id>")
+def rename_chat(chat_id):
+    payload = request.get_json(silent=True) or {}
+    title = str(payload.get("title") or "").strip()[:60]
+
+    if not title:
+        return jsonify({"error": "Chat name cannot be empty"}), 400
+
+    with _store_lock:
+        store = load_store()
+        chat = find_chat(store, chat_id)
+        if chat is None:
+            return jsonify({"error": "Chat not found"}), 404
+
+        chat["title"] = title
+        chat["updated_at"] = now_iso()
+        save_store(store)
+
+    return jsonify({"ok": True, "title": title})
 
 
 @app.delete("/api/chats/<chat_id>")
