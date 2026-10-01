@@ -700,3 +700,31 @@ textarea::placeholder { color: #8a8b8f; }
   from { opacity: 0; transform: translateY(6px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+
+/* Safer chat deletion */
+.chat-delete {
+  color: #c43a3a;
+}
+.chat-delete:hover {
+  background: #fdecec;
+  color: #a61f1f;
+}
+.chat-delete svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.modal-btn.danger {
+  background: #c93434;
+  border-color: #c93434;
+  color: #fff;
+}
+.modal-btn.danger:hover {
+  background: #b72b2b;
+  border-color: #b72b2b;
+}
