@@ -40,10 +40,10 @@ V2_FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v2.pt"
 V2_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v2.json"
 
 MAX_NEW_TOKENS = 100
-TEMPERATURE = 0.45
-TOP_K = 40
-TOP_P = 0.92
-REPETITION_PENALTY = 1.12
+TEMPERATURE = 0.20
+TOP_K = 1
+TOP_P = 1.0
+REPETITION_PENALTY = 1.08
 QUALITY_CANDIDATES = 1
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -145,13 +145,27 @@ def load_model():
 
 
 def build_history_prompt(messages):
-    # v4 chat tuning currently uses single-turn instruction examples.
-    # Keeping old turns in the token prompt causes the small model to copy or
-    # blend previous questions, so use only the current user turn for now.
-    current_user = messages[-1]["content"]
-    prompt_ids = _tokenizer.encode(
-        f"User: {current_user}\nAssistant:"
-    )
+    # Use a short rolling window. v4 is now trained with curated multi-turn
+    # conversations, but its 47M parameter size still benefits from keeping
+    # context compact and recent.
+    recent = messages[-7:]
+    parts = []
+    for message in recent:
+        role = message.get("role")
+        content = str(message.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            parts.append(f"User: {content}")
+        elif role == "assistant":
+            parts.append(f"Assistant: {content}")
+
+    if not recent or recent[-1].get("role") != "user":
+        current_user = messages[-1]["content"]
+        parts.append(f"User: {current_user}")
+
+    parts.append("Assistant:")
+    prompt_ids = _tokenizer.encode("\n".join(parts))
     return prompt_ids[-_model.context_length:]
 
 
