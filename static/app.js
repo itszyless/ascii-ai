@@ -11,6 +11,11 @@ const statusDot = document.getElementById("statusDot");
 const statusTitle = document.getElementById("statusTitle");
 const statusSub = document.getElementById("statusSub");
 const sidebar = document.getElementById("sidebar");
+const renameModal = document.getElementById("renameModal");
+const renameInput = document.getElementById("renameInput");
+const renameSave = document.getElementById("renameSave");
+const renameCancel = document.getElementById("renameCancel");
+let renameChatId = null;
 
 const icons = {
   copy: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>',
@@ -54,15 +59,26 @@ function renderSidebar() {
     open.textContent = chat.title;
     open.onclick = () => openChat(chat.id);
 
+    const edit = document.createElement("button");
+    edit.className = "chat-edit";
+    edit.title = "Rename chat";
+    edit.setAttribute("aria-label", "Rename chat");
+    edit.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
+    edit.onclick = event => {
+      event.stopPropagation();
+      openRenameModal(chat);
+    };
+
     const del = document.createElement("button");
     del.className = "chat-delete";
     del.textContent = "×";
+    del.title = "Delete chat";
     del.onclick = async event => {
       event.stopPropagation();
       await deleteChat(chat.id);
     };
 
-    row.append(open, del);
+    row.append(open, edit, del);
     chatList.appendChild(row);
   }
 }
@@ -330,6 +346,47 @@ async function deleteChat(id) {
   await refreshChats();
 }
 
+function openRenameModal(chat) {
+  renameChatId = chat.id;
+  renameInput.value = chat.title || "";
+  renameModal.hidden = false;
+  requestAnimationFrame(() => {
+    renameInput.focus();
+    renameInput.select();
+  });
+}
+
+function closeRenameModal() {
+  renameModal.hidden = true;
+  renameChatId = null;
+}
+
+async function saveRename() {
+  const title = renameInput.value.trim();
+  if (!renameChatId || !title) return;
+
+  await api(`/api/chats/${renameChatId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+  });
+  closeRenameModal();
+  await refreshChats();
+}
+
+renameSave.onclick = saveRename;
+renameCancel.onclick = closeRenameModal;
+renameModal.addEventListener("click", event => {
+  if (event.target === renameModal) closeRenameModal();
+});
+renameInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    saveRename();
+  } else if (event.key === "Escape") {
+    closeRenameModal();
+  }
+});
+
 async function rateMessage(messageId, rating) {
   await api(
     `/api/chats/${state.activeChatId}/messages/${messageId}/rating`,
@@ -375,7 +432,6 @@ async function sendMessage(text) {
 
   state.sending = true;
   sendBtn.disabled = true;
-  input.disabled = true;
 
   addMessageToDom("user", text);
   addThinking();
@@ -395,20 +451,13 @@ async function sendMessage(text) {
     await revealAssistantMessage(result.message);
     await refreshChats();
 
-    if (result.checkpoint) {
-      statusTitle.textContent = result.checkpoint;
-      statusSub.textContent = result.device
-        ? `Running on ${result.device}`
-        : "Loaded";
-      statusDot.className = "status-dot ready";
-    }
+    // Keep the sidebar footer as stable product branding.
   } catch (error) {
     removeThinking();
     addMessageToDom("assistant", `Error: ${error.message}`);
   } finally {
     state.sending = false;
     sendBtn.disabled = false;
-    input.disabled = false;
     input.focus();
   }
 }
@@ -420,15 +469,9 @@ function resizeInput() {
 
 async function checkStatus() {
   try {
-    const status = await api("/api/status");
-    statusDot.className = status.ready ? "status-dot ready" : "status-dot bad";
-    statusTitle.textContent = status.checkpoint || "Model not ready";
-    statusSub.textContent = status.chat_tuned
-      ? "Chat model ready"
-      : "Base model only";
+    await api("/api/status");
   } catch {
-    statusDot.className = "status-dot bad";
-    statusTitle.textContent = "Backend unavailable";
+    // Product branding remains visible even if the backend is unavailable.
   }
 }
 
