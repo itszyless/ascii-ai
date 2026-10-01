@@ -159,12 +159,67 @@ def load_model():
     _model_signature = signature
 
 
+def should_use_history(user_prompt):
+    text = " ".join(str(user_prompt).lower().split())
+
+    # Clear standalone questions/commands should not be contaminated by older
+    # turns. The small model handles them much better as single-turn prompts.
+    standalone_markers = (
+        "who are you",
+        "what are you",
+        "your name",
+        "how are you",
+        "what is ",
+        "what's ",
+        "whats ",
+        "who is ",
+        "where is ",
+        "when is ",
+        "why is ",
+        "how does ",
+        "how do ",
+        "say ",
+        "just say",
+        "tell me ",
+        "answer this",
+        "calculate",
+    )
+    if any(marker in text for marker in standalone_markers):
+        return False
+
+    # Very short follow-ups and references normally depend on the previous turn.
+    followup_markers = (
+        "really",
+        "are you sure",
+        "go deeper",
+        "explain it",
+        "explain that",
+        "what do you mean",
+        "why?",
+        "how so",
+        "that",
+        "it",
+        "this",
+        "i never said",
+    )
+    if len(text.split()) <= 8 and any(marker in text for marker in followup_markers):
+        return True
+
+    return False
+
+
 def build_history_prompt(messages):
+    current_user = str(messages[-1].get("content") or "").strip()
+
+    if not should_use_history(current_user):
+        prompt_ids = _tokenizer.encode(
+            f"User: {current_user}\nAssistant:"
+        )
+        return prompt_ids[-_model.context_length:]
+
     # Match the exact multi-turn format used during fine-tuning:
     # User prompt -> Assistant response -> EOS -> next User prompt.
-    # Earlier we used plain newlines between turns, which was a train/inference
-    # mismatch and caused identity/follow-up answers to drift badly.
-    recent = messages[-7:]
+    recent = messages[-5:]
     token_ids = []
     pending_user = None
 
@@ -190,7 +245,6 @@ def build_history_prompt(messages):
             )
             pending_user = None
 
-    current_user = str(messages[-1].get("content") or "").strip()
     token_ids.extend(
         _tokenizer.encode(
             f"User: {current_user}\nAssistant:"
@@ -344,7 +398,7 @@ def list_chats():
 @app.post("/api/chats")
 def create_chat():
     payload = request.get_json(silent=True) or {}
-    title = str(payload.get("title") or "New chat").strip()[:60] or "New chat"
+    title = str(payload.get("title") or "New chat").strip()[:15] or "New chat"
     stamp = now_iso()
 
     chat = {
@@ -377,7 +431,7 @@ def get_chat(chat_id):
 @app.patch("/api/chats/<chat_id>")
 def rename_chat(chat_id):
     payload = request.get_json(silent=True) or {}
-    title = str(payload.get("title") or "").strip()[:60]
+    title = str(payload.get("title") or "").strip()[:15]
 
     if not title:
         return jsonify({"error": "Chat name cannot be empty"}), 400
@@ -434,7 +488,7 @@ def send_message(chat_id):
 
         if chat["title"] == "New chat":
             clean = content.replace("\n", " ")
-            chat["title"] = clean[:42] + ("…" if len(clean) > 42 else "")
+            chat["title"] = clean[:15] + ("…" if len(clean) > 15 else "")
 
         chat["updated_at"] = now_iso()
         save_store(store)
