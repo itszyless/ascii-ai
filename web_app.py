@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import logging
 import os
 from pathlib import Path
 import threading
@@ -45,6 +46,10 @@ TOP_K = 1
 TOP_P = 1.0
 REPETITION_PENALTY = 1.08
 QUALITY_CANDIDATES = 1
+
+# Keep the terminal clean: Flask/Werkzeug normally prints one line for every
+# browser request. Errors still surface through the app/API itself.
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
