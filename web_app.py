@@ -145,28 +145,44 @@ def load_model():
 
 
 def build_history_prompt(messages):
-    # Use a short rolling window. v4 is now trained with curated multi-turn
-    # conversations, but its 47M parameter size still benefits from keeping
-    # context compact and recent.
+    # Match the exact multi-turn format used during fine-tuning:
+    # User prompt -> Assistant response -> EOS -> next User prompt.
+    # Earlier we used plain newlines between turns, which was a train/inference
+    # mismatch and caused identity/follow-up answers to drift badly.
     recent = messages[-7:]
-    parts = []
-    for message in recent:
+    token_ids = []
+    pending_user = None
+
+    for message in recent[:-1]:
         role = message.get("role")
         content = str(message.get("content") or "").strip()
         if not content:
             continue
+
         if role == "user":
-            parts.append(f"User: {content}")
-        elif role == "assistant":
-            parts.append(f"Assistant: {content}")
+            pending_user = content
+        elif role == "assistant" and pending_user is not None:
+            token_ids.extend(
+                _tokenizer.encode(
+                    f"User: {pending_user}\nAssistant:"
+                )
+            )
+            token_ids.extend(
+                _tokenizer.encode(
+                    f" {content}",
+                    add_eos=True,
+                )
+            )
+            pending_user = None
 
-    if not recent or recent[-1].get("role") != "user":
-        current_user = messages[-1]["content"]
-        parts.append(f"User: {current_user}")
+    current_user = str(messages[-1].get("content") or "").strip()
+    token_ids.extend(
+        _tokenizer.encode(
+            f"User: {current_user}\nAssistant:"
+        )
+    )
 
-    parts.append("Assistant:")
-    prompt_ids = _tokenizer.encode("\n".join(parts))
-    return prompt_ids[-_model.context_length:]
+    return token_ids[-_model.context_length:]
 
 
 def _decode_candidate(generated, prompt_length):
