@@ -768,3 +768,108 @@ body.sidebar-collapsed .main {
   }
   body.sidebar-collapsed .desktop-sidebar-open { display: none; }
 }
+
+
+/* ChatGPT-like collapsed sidebar rail */
+.sidebar {
+  transition:
+    width .28s var(--ease),
+    flex-basis .28s var(--ease),
+    padding .28s var(--ease),
+    transform .28s var(--ease),
+    box-shadow .28s var(--ease);
+}
+
+body.sidebar-collapsed .sidebar {
+  width: 52px;
+  flex-basis: 52px;
+  padding: 8px 6px;
+  border-right: 1px solid var(--border);
+  transform: translateX(0);
+  overflow: hidden;
+}
+
+body.sidebar-collapsed .sidebar-top {
+  padding: 0;
+  min-height: 40px;
+  justify-content: center;
+}
+
+body.sidebar-collapsed .brand,
+body.sidebar-collapsed .chat-section-label,
+body.sidebar-collapsed .chat-list,
+body.sidebar-collapsed .sidebar-footer {
+  display: none;
+}
+
+body.sidebar-collapsed .sidebar-toggle {
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+body.sidebar-collapsed .new-chat-btn {
+  width: 40px;
+  height: 40px;
+  margin: 8px auto 0;
+  padding: 0;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+body.sidebar-collapsed .new-chat-btn span:last-child {
+  display: none;
+}
+
+body.sidebar-collapsed .new-chat-btn .plus {
+  font-size: 22px;
+  line-height: 1;
+}
+
+body.sidebar-collapsed .desktop-sidebar-open {
+  display: none;
+}
+
+body.sidebar-animating .sidebar > * {
+  transition: opacity .18s var(--ease), transform .18s var(--ease);
+}
+
+@media (min-width: 761px) {
+  body.sidebar-collapsed .main {
+    width: calc(100% - 52px);
+  }
+}
+
+@media (max-width: 760px) {
+  body.sidebar-collapsed .sidebar {
+    width: 280px;
+    flex-basis: 280px;
+    padding: 12px;
+    transform: translateX(-100%);
+  }
+
+  body.sidebar-collapsed .brand,
+  body.sidebar-collapsed .chat-section-label,
+  body.sidebar-collapsed .chat-list,
+  body.sidebar-collapsed .sidebar-footer {
+    display: initial;
+  }
+
+  body.sidebar-collapsed .new-chat-btn {
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 10px 11px;
+    justify-content: flex-start;
+  }
+
+  body.sidebar-collapsed .new-chat-btn span:last-child {
+    display: inline;
+  }
+}
+
+/* Speaker icon should keep normal proportions */
+.response-action[aria-label="Read aloud"] svg {
+  width: 17px;
+  height: 17px;
+}
