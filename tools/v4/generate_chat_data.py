@@ -55,6 +55,15 @@ FACTS = [
     ("What is the internet?", "The internet is a global network that connects computers and other devices."),
     ("What is storage in a computer?", "Storage keeps files and programs for long-term use, even after the computer is turned off."),
     ("What is the difference between RAM and storage?", "RAM is fast temporary memory for active work, while storage keeps files and programs long term."),
+    ("What is a computer?", "A computer is an electronic device that processes data and runs programs."),
+    ("What does a computer do?", "A computer processes data, runs programs, and stores information."),
+    ("What is a monitor?", "A monitor is an output device that displays visual information from a computer."),
+    ("What is a keyboard?", "A keyboard is an input device used to type text and commands into a computer."),
+    ("What is a mouse?", "A mouse is an input device used to point, click, and interact with items on a screen."),
+    ("What is a GPU?", "A GPU is a processor designed to handle graphics and many parallel calculations."),
+    ("What is an operating system?", "An operating system manages computer hardware and provides services for programs."),
+    ("What is software?", "Software is the set of programs and instructions that run on a computer."),
+    ("What is hardware?", "Hardware is the physical equipment that makes up a computer."),
 ]
 
 CONVERSATION = [
@@ -77,6 +86,18 @@ CONVERSATION = [
     ("Write a short sentence about a dog.", "The dog ran happily through the park."),
     ("Name a fruit and describe it.", "An apple is a fruit that is usually crisp and can taste sweet or tart."),
     ("Say something friendly without repeating yourself.", "I hope something good happens for you today."),
+    ("Who are you?", "I'm OrcaAI, a local AI assistant running on this computer."),
+    ("What are you?", "I'm OrcaAI, a local AI assistant."),
+    ("Are you human?", "No. I'm an AI assistant, not a human."),
+    ("Are you a person?", "No. I'm an AI assistant."),
+    ("What is your name?", "My name is OrcaAI."),
+    ("Can you say 123?", "123"),
+    ("Say 123.", "123"),
+    ("Why are you cool?", "Because I'm a small local AI built and trained from scratch."),
+    ("Lol", "Lol."),
+    ("Really?", "Yes."),
+    ("Okay, really?", "Yes."),
+    ("What's the issue?", "Tell me what seems wrong and I'll try to help."),
 ]
 
 EXPLANATIONS = [
@@ -95,6 +116,32 @@ for a in range(0, 13):
 for a in range(0, 13):
     for b in range(0, a + 1):
         MATH.append((f"What is {a} - {b}?", f"{a} - {b} = {a - b}."))
+
+MULTI_TURN = [
+    [
+        ("Hey", "Hey! What's up?"),
+        ("What's RAM?", "RAM is temporary memory that stores data the computer is actively using."),
+        ("Really?", "Yes. RAM is short-term memory, while storage keeps data long term."),
+        ("Can you explain it deeper?", "Sure. Programs load active data into RAM so the CPU can access it much faster than long-term storage."),
+    ],
+    [
+        ("What's a computer?", "A computer is an electronic device that processes data and runs programs."),
+        ("Can you explain that more simply?", "A computer takes input, processes information, and gives you output."),
+    ],
+    [
+        ("Who are you?", "I'm OrcaAI, a local AI assistant."),
+        ("Are you human?", "No. I'm an AI assistant, not a human."),
+        ("Really?", "Yes. I'm software running locally on this computer."),
+    ],
+    [
+        ("What's the capital of France?", "Paris is the capital of France."),
+        ("Are you sure?", "Yes. Paris is the capital of France."),
+    ],
+    [
+        ("What is RAM?", "RAM is temporary memory that stores data programs and the CPU need quickly."),
+        ("Can you go deeper?", "RAM holds active program data so the CPU can access it quickly. Its contents are usually lost when the computer powers off."),
+    ],
+]
 
 PROMPT_VARIANTS = [
     "{q}",
@@ -120,6 +167,15 @@ def build():
         add(q, a, "conversation")
     for q, a in EXPLANATIONS:
         add(q, a, "explanation")
+
+    for turns in MULTI_TURN:
+        rows.append({
+            "turns": [
+                {"user": user, "assistant": assistant}
+                for user, assistant in turns
+            ],
+            "category": "multi_turn",
+        })
 
     # Math already has lots of coverage; use two phrasings each.
     for q, a in MATH:
