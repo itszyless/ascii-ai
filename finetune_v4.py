@@ -16,7 +16,7 @@ from model_v4 import OrcaAIv4
 from tokenizer import LocalTokenizer
 
 
-CHAT_PATH = Path("data/chat.txt")
+CHAT_PATH = Path("data/chat.txt")\nCURATED_CHAT_PATH = Path("data/chat_v4_curated.jsonl")
 FINEWEB_PATH = Path("data/fineweb_v4.bin")
 WIKI_PATH = Path("data/wikipedia_v4.bin")
 GROUNDED_MODEL_PATH = Path("checkpoints/model_v4_grounded.pt")
@@ -42,6 +42,24 @@ SEED = 2404
 
 def normalize(text):
     return " ".join(text.lower().split())
+
+
+
+def load_curated_examples(path):
+    if not path.exists():
+        return []
+
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        item = json.loads(line)
+        user = str(item.get("user", "")).strip()
+        assistant = str(item.get("assistant", "")).strip()
+        if user and assistant:
+            rows.append([(user, assistant)])
+    return rows
 
 
 def parse_conversations(text):
@@ -392,6 +410,18 @@ def main():
         )
     )
     balanced = rebalance(conversations)
+
+    curated = load_curated_examples(
+        CURATED_CHAT_PATH
+    )
+    if curated:
+        # Prefer the curated set and keep only a small sample of the old
+        # synthetic chat data so low-quality repeated patterns do not dominate.
+        rng = random.Random(SEED)
+        rng.shuffle(balanced)
+        legacy_keep = balanced[:min(60, len(balanced))]
+        balanced = curated + legacy_keep
+        rng.shuffle(balanced)
     train_raw, val_raw = split_examples(
         balanced
     )
