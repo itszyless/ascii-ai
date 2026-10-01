@@ -728,3 +728,43 @@ textarea::placeholder { color: #8a8b8f; }
   background: #b72b2b;
   border-color: #b72b2b;
 }
+
+
+/* Desktop sidebar toggle */
+.sidebar-toggle svg,
+.desktop-sidebar-open svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.desktop-sidebar-open {
+  display: none;
+  place-items: center;
+}
+body.sidebar-collapsed .sidebar {
+  width: 0;
+  flex-basis: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right: 0;
+  overflow: hidden;
+  transform: translateX(-100%);
+}
+body.sidebar-collapsed .desktop-sidebar-open {
+  display: inline-grid;
+}
+body.sidebar-collapsed .main {
+  width: 100%;
+}
+@media (max-width: 760px) {
+  .sidebar-toggle { display: none; }
+  body.sidebar-collapsed .sidebar {
+    width: 280px;
+    flex-basis: 280px;
+    padding: 12px;
+    border-right: 1px solid var(--border);
+  }
+  body.sidebar-collapsed .desktop-sidebar-open { display: none; }
+}
