@@ -77,6 +77,17 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="deleteModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+      <div class="modal-title" id="deleteTitle">Delete chat?</div>
+      <div class="modal-subtitle">This will permanently delete this conversation.</div>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" id="deleteCancel" type="button">Cancel</button>
+        <button class="modal-btn danger" id="deleteConfirm" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
