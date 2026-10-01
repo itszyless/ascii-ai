@@ -585,3 +585,118 @@ textarea::placeholder { color: #8a8b8f; }
 .thinking-row .assistant-avatar {
   margin-top: 3px;
 }
+
+
+/* OrcaAI sidebar branding + chat rename */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.brand-logo {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+.product-footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 2px 0;
+}
+.footer-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.chat-item { gap: 2px; }
+.chat-edit,
+.chat-delete {
+  opacity: 0;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  transition: opacity .15s var(--ease), background .15s var(--ease), color .15s var(--ease);
+}
+.chat-item:hover .chat-edit,
+.chat-item:hover .chat-delete { opacity: 1; }
+.chat-edit:hover,
+.chat-delete:hover { background: #dedee2; color: #111; }
+.chat-edit svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0,0,0,.28);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal-card {
+  width: min(420px, 100%);
+  background: #fff;
+  border: 1px solid #e3e3e3;
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.16);
+  padding: 22px;
+  animation: modalIn .18s var(--ease) both;
+}
+.modal-title {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+}
+.modal-subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.modal-input {
+  width: 100%;
+  margin-top: 18px;
+  border: 1px solid #d8d8d8;
+  border-radius: 10px;
+  outline: 0;
+  padding: 11px 12px;
+  font: inherit;
+}
+.modal-input:focus {
+  border-color: #a9a9a9;
+  box-shadow: 0 0 0 3px rgba(0,0,0,.05);
+}
+.modal-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.modal-btn {
+  border-radius: 9px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border: 1px solid #dedede;
+  font-weight: 550;
+}
+.modal-btn.secondary { background: #fff; }
+.modal-btn.primary { background: #111; border-color: #111; color: #fff; }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
