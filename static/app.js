@@ -320,6 +320,17 @@ async function refreshChats() {
 }
 
 async function createChat() {
+  if (state.activeChatId) {
+    try {
+      const current = await api(`/api/chats/${state.activeChatId}`);
+      if (!current.messages || current.messages.length === 0) {
+        input.focus();
+        closeSidebarOnMobile();
+        return current;
+      }
+    } catch {}
+  }
+
   const chat = await api("/api/chats", {
     method: "POST",
     body: "{}",
