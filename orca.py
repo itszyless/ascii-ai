@@ -17,7 +17,7 @@ COMMANDS = {
     "prepare": "prepare_v4.py",
     "train": "train_v4.py",
     "test": "test_v4.py",
-    "finetune": "finetune_v4.py",
+    "finetune": "finetune_v4.py",\n    "make-chat-data": "tools/v4/generate_chat_data.py",
     "test-chat": "tools/v4/test_chat.py",
     "ground-data": "tools/v4/generate_grounding.py",
     "ground": "tools/v4/ground.py",
@@ -48,7 +48,7 @@ def print_help():
         "knowledge": "run/resume knowledge-focused continued pretraining",
         "benchmark-knowledge": "long held-out + generation sweep benchmark",
         "analyze-knowledge": "summarize the latest knowledge benchmark",
-        "finetune": "run v4 chat fine-tuning when the base is ready",
+        "finetune": "run v4 chat fine-tuning when the base is ready",\n        "make-chat-data": "generate the curated v4 chat dataset",
         "test-chat": "sanity-test the v4 chat checkpoint",
         "web": "start the local OrcaAI web app",
     }
