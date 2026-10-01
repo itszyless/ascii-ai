@@ -406,24 +406,23 @@ def main():
     config = checkpoint["config"]
     context_length = config["context_length"]
 
-    conversations = parse_conversations(
-        CHAT_PATH.read_text(
-            encoding="utf-8"
-        )
-    )
-    balanced = rebalance(conversations)
-
     curated = load_curated_examples(
         CURATED_CHAT_PATH
     )
+
     if curated:
-        # Prefer the curated set and keep only a small sample of the old
-        # synthetic chat data so low-quality repeated patterns do not dominate.
+        # Use the curated dataset alone for this refinement pass.
+        balanced = curated
         rng = random.Random(SEED)
         rng.shuffle(balanced)
-        legacy_keep = balanced[:min(60, len(balanced))]
-        balanced = curated + legacy_keep
-        rng.shuffle(balanced)
+    else:
+        conversations = parse_conversations(
+            CHAT_PATH.read_text(
+                encoding="utf-8"
+            )
+        )
+        balanced = rebalance(conversations)
+
     train_raw, val_raw = split_examples(
         balanced
     )
