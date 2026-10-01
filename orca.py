@@ -28,6 +28,9 @@ COMMANDS = {
     "benchmark-knowledge": "tools/v4/benchmark_knowledge.py",
     "analyze-knowledge": "tools/v4/analyze_knowledge.py",
     "web": "web_app.py",
+    "prepare-v5": "prepare_v5.py",
+    "train-v5": "train_v5.py",
+    "test-v5": "test_v5.py",
 }
 
 
@@ -53,6 +56,9 @@ def print_help():
         "make-chat-data": "generate the curated v4 chat dataset",
         "test-chat": "sanity-test the v4 chat checkpoint",
         "web": "start the local OrcaAI web app",
+        "prepare-v5": "prepare the larger v5 tokenizer and 1.5B-token corpus",
+        "train-v5": "start/resume larger v5 base pretraining",
+        "test-v5": "interactive v5 base-model test",
     }
     width = max(len(name) for name in COMMANDS)
     for name in COMMANDS:
