@@ -873,3 +873,42 @@ body.sidebar-animating .sidebar > * {
   width: 17px;
   height: 17px;
 }
+
+
+/* Collapsed rail: logo by default, sidebar glyph on hover */
+.sidebar-toggle-logo {
+  display: none;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.sidebar-toggle-icon {
+  display: block;
+}
+
+body.sidebar-collapsed .sidebar-toggle-logo {
+  display: block;
+}
+
+body.sidebar-collapsed .sidebar-toggle-icon {
+  display: none;
+}
+
+body.sidebar-collapsed .sidebar-toggle:hover .sidebar-toggle-logo,
+body.sidebar-collapsed .sidebar-toggle:focus-visible .sidebar-toggle-logo {
+  display: none;
+}
+
+body.sidebar-collapsed .sidebar-toggle:hover .sidebar-toggle-icon,
+body.sidebar-collapsed .sidebar-toggle:focus-visible .sidebar-toggle-icon {
+  display: block;
+}
+
+body.sidebar-collapsed .sidebar-toggle {
+  transition: background .16s var(--ease), transform .16s var(--ease);
+}
+
+body.sidebar-collapsed .sidebar-toggle:hover {
+  background: var(--sidebar-hover);
+}
