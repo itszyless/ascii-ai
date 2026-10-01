@@ -27,6 +27,7 @@ PROMPTS = [
     "What is Python?",
     "What is 2 + 2?",
     "What is the capital of France?",
+    "What is the capital of Russia?",
     "Why is the sky blue?",
     "Explain what a database is in simple words.",
     "What is the difference between RAM and storage?",
@@ -44,6 +45,14 @@ PROMPTS = [
 ]
 
 MULTI_TURN_TESTS = [
+    [
+        "hey",
+        "who are you",
+        "no, who are you??",
+        "whats ram?",
+        "what? i thought you are smart",
+        "stop it. answer this: whats the capital of russia",
+    ],
     [
         "Hey",
         "Who are you?",
