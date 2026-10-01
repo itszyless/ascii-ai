@@ -24,6 +24,7 @@ DATA_DIR = ROOT / "data"
 CHAT_STORE = DATA_DIR / "web_chats.json"
 CHECKPOINT_DIR = ROOT / "checkpoints"
 V4_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v4.pt"
+V4_GROUNDED_MODEL_PATH = CHECKPOINT_DIR / "model_v4_grounded.pt"
 V4_BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v4_best.pt"
 V4_FALLBACK_BASE_PATH = CHECKPOINT_DIR / "model_v4.pt"
 V4_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v4.json"
@@ -85,6 +86,8 @@ def find_chat(store, chat_id):
 def choose_model():
     if V4_CHAT_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
         return V4_CHAT_MODEL_PATH, V4_TOKENIZER_PATH, "v4", True
+    if V4_GROUNDED_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
+        return V4_GROUNDED_MODEL_PATH, V4_TOKENIZER_PATH, "v4", False
     if V4_BASE_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
         return V4_BASE_MODEL_PATH, V4_TOKENIZER_PATH, "v4", False
     if V4_FALLBACK_BASE_PATH.exists() and V4_TOKENIZER_PATH.exists():
