@@ -113,6 +113,22 @@ A dog is an
 
 Do not run chat fine-tuning merely because the output is grammatical. The base should also be relevant and reasonably factual.
 
+## Diagnose v4 before fine-tuning
+
+After pretraining, run the diagnostic benchmark before deciding whether the base is ready for chat tuning:
+
+```powershell
+py -3.12 diagnose_v4.py --extended
+```
+
+It compares `model_v4_best.pt` and `model_v4.pt`, scores factual continuations against distractors, generates multiple seeded continuations, measures repetition, and saves a full report to:
+
+```text
+data/v4_diagnostic_report.json
+```
+
+The diagnostic does not train or modify model weights.
+
 ## Chat fine-tuning
 
 Once the v4 base passes the sanity test:
