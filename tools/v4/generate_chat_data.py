@@ -66,6 +66,16 @@ FACTS = [
     ("What is hardware?", "Hardware is the physical equipment that makes up a computer."),
 ]
 
+CORE_ARITHMETIC = [
+    ("What is 2 + 2?", "2 + 2 = 4."),
+    ("What's 2 + 2?", "2 + 2 = 4."),
+    ("2 + 2?", "2 + 2 = 4."),
+    ("Calculate 2 + 2.", "2 + 2 = 4."),
+    ("What is 3 + 4?", "3 + 4 = 7."),
+    ("What is 5 + 5?", "5 + 5 = 10."),
+    ("What is 10 - 4?", "10 - 4 = 6."),
+]
+
 CONVERSATION = [
     ("Hi!", "Hi! How can I help you?"),
     ("Hello!", "Hello! What would you like to talk about?"),
@@ -119,6 +129,23 @@ for a in range(0, 13):
 
 MULTI_TURN = [
     [
+        ("Who are you?", "I'm OrcaAI, a local AI assistant."),
+        ("Are you human?", "No. I'm an AI assistant, not a human."),
+        ("Really?", "Yes. I'm software, not a human."),
+        ("Are you sure?", "Yes. I'm an AI assistant, not a human."),
+    ],
+    [
+        ("What's the capital of France?", "Paris is the capital of France."),
+        ("Are you sure?", "Yes. Paris is the capital of France."),
+        ("Really?", "Yes. Paris is the capital of France."),
+    ],
+    [
+        ("What's RAM?", "RAM is temporary memory used for data the computer needs quickly."),
+        ("Really?", "Yes. RAM is short-term working memory."),
+        ("Can you explain it deeper?", "Programs load active data into RAM so the CPU can access it quickly. RAM is much faster than long-term storage."),
+        ("So it is temporary?", "Yes. RAM is temporary memory and usually loses its contents when the computer powers off."),
+    ],
+    [
         ("Hey", "Hey! What's up?"),
         ("What's RAM?", "RAM is temporary memory that stores data the computer is actively using."),
         ("Really?", "Yes. RAM is short-term memory, while storage keeps data long term."),
@@ -165,17 +192,31 @@ def build():
         add(q, a, "fact")
     for q, a in CONVERSATION:
         add(q, a, "conversation")
+
+    # Reinforce a few tiny arithmetic facts that are easy for the base model
+    # to confuse even after broad arithmetic training.
+    for q, a in CORE_ARITHMETIC:
+        for _ in range(12):
+            rows.append({
+                "user": q,
+                "assistant": a,
+                "category": "core_math",
+            })
     for q, a in EXPLANATIONS:
         add(q, a, "explanation")
 
+    # Multi-turn examples need much more weight than single-turn rows.
+    # Otherwise hundreds of factual/math rows dominate and the model learns
+    # isolated answers without learning what short follow-ups refer to.
     for turns in MULTI_TURN:
-        rows.append({
-            "turns": [
-                {"user": user, "assistant": assistant}
-                for user, assistant in turns
-            ],
-            "category": "multi_turn",
-        })
+        for _ in range(24):
+            rows.append({
+                "turns": [
+                    {"user": user, "assistant": assistant}
+                    for user, assistant in turns
+                ],
+                "category": "multi_turn",
+            })
 
     # Math already has lots of coverage; use two phrasings each.
     for q, a in MATH:
