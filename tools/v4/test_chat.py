@@ -43,10 +43,28 @@ PROMPTS = [
     "Say something friendly without repeating yourself.",
 ]
 
-TEMPERATURE = 0.45
-TOP_K = 40
-TOP_P = 0.92
-REPETITION_PENALTY = 1.12
+MULTI_TURN_TESTS = [
+    [
+        "Hey",
+        "Who are you?",
+        "Are you human?",
+        "Really?",
+    ],
+    [
+        "What's RAM?",
+        "Really?",
+        "Can you explain it deeper?",
+    ],
+    [
+        "What's the capital of France?",
+        "Are you sure?",
+    ],
+]
+
+TEMPERATURE = 0.20
+TOP_K = 1
+TOP_P = 1.0
+REPETITION_PENALTY = 1.08
 MAX_NEW_TOKENS = 100
 SEED = 2404
 
@@ -72,6 +90,19 @@ def clean_reply(text):
         if marker in text:
             text = text.split(marker, 1)[0]
     return text.strip()
+
+
+def build_history_prompt(history, tokenizer, context_length):
+    recent = history[-7:]
+    parts = []
+    for role, content in recent:
+        if role == "user":
+            parts.append(f"User: {content}")
+        else:
+            parts.append(f"Assistant: {content}")
+    parts.append("Assistant:")
+    ids = tokenizer.encode("\n".join(parts))
+    return ids[-context_length:]
 
 
 @torch.inference_mode()
@@ -154,6 +185,42 @@ def main():
 
         print(f"[{index:02d}] User: {user_prompt}")
         print(f"     OrcaAI: {reply or '<EMPTY>'}")
+        print()
+
+    print("=" * 76)
+    print("Multi-turn checks")
+    print("=" * 76)
+
+    for convo_index, turns in enumerate(MULTI_TURN_TESTS, 1):
+        history = []
+        print(f"Conversation {convo_index}:")
+        for turn_index, user_prompt in enumerate(turns, 1):
+            history.append(("user", user_prompt))
+            prompt_ids = build_history_prompt(
+                history,
+                tokenizer,
+                model.context_length,
+            )
+            x = torch.tensor(
+                [prompt_ids],
+                dtype=torch.long,
+                device=device,
+            )
+
+            generated = model.generate(
+                x,
+                max_new_tokens=MAX_NEW_TOKENS,
+                temperature=TEMPERATURE,
+                top_k=TOP_K,
+                top_p=TOP_P,
+                repetition_penalty=REPETITION_PENALTY,
+                stop_token_ids={tokenizer.eos_id},
+            )
+            new_ids = generated[0, x.size(1):].tolist()
+            reply = clean_reply(tokenizer.decode(new_ids))
+            history.append(("assistant", reply))
+            print(f"  User: {user_prompt}")
+            print(f"  OrcaAI: {reply or '<EMPTY>'}")
         print()
 
     normalized = [
