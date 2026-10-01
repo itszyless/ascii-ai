@@ -19,22 +19,23 @@ from tokenizer import LocalTokenizer
 CHAT_PATH = Path("data/chat.txt")
 FINEWEB_PATH = Path("data/fineweb_v4.bin")
 WIKI_PATH = Path("data/wikipedia_v4.bin")
+GROUNDED_MODEL_PATH = Path("checkpoints/model_v4_grounded.pt")
 MODEL_PATH = Path("checkpoints/model_v4_best.pt")
 FALLBACK_MODEL_PATH = Path("checkpoints/model_v4.pt")
 TOKENIZER_PATH = Path("checkpoints/tokenizer_v4.json")
 OUTPUT_PATH = Path("checkpoints/chat_model_v4.pt")
 
-MAX_STEPS = 800
+MAX_STEPS = 400
 BATCH_SIZE = 6
-LEARNING_RATE = 2e-6
+LEARNING_RATE = 1e-6
 PRINT_EVERY = 20
 EVAL_EVERY = 20
 EVAL_BATCHES = 20
 VALIDATION_FRACTION = 0.10
-EARLY_STOP_PATIENCE = 6
+EARLY_STOP_PATIENCE = 4
 MIN_IMPROVEMENT = 0.002
 BASE_REPLAY_EVERY = 4
-BASE_REPLAY_WEIGHT = 0.15
+BASE_REPLAY_WEIGHT = 0.25
 MAX_SAME_RESPONSE = 3
 SEED = 2404
 
@@ -359,7 +360,9 @@ def main():
         )
 
     model_path = (
-        MODEL_PATH
+        GROUNDED_MODEL_PATH
+        if GROUNDED_MODEL_PATH.exists()
+        else MODEL_PATH
         if MODEL_PATH.exists()
         else FALLBACK_MODEL_PATH
     )
