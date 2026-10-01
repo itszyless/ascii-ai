@@ -22,6 +22,10 @@ TOKENIZER = Path("checkpoints/tokenizer_v4.json")
 
 PROMPTS = [
     "Hi! How are you?",
+    "How are you doing?",
+    "Can you just tell me your name, nothing else?",
+    "Say 123 please.",
+    "What? Just say \"123\".",
     "What is RAM?",
     "What does a CPU do?",
     "What is Python?",
@@ -101,8 +105,59 @@ def clean_reply(text):
     return text.strip()
 
 
+def should_use_history(user_prompt):
+    text = " ".join(str(user_prompt).lower().split())
+    standalone_markers = (
+        "who are you",
+        "what are you",
+        "your name",
+        "how are you",
+        "what is ",
+        "what's ",
+        "whats ",
+        "who is ",
+        "where is ",
+        "when is ",
+        "why is ",
+        "how does ",
+        "how do ",
+        "say ",
+        "just say",
+        "tell me ",
+        "answer this",
+        "calculate",
+    )
+    if any(marker in text for marker in standalone_markers):
+        return False
+
+    followup_markers = (
+        "really",
+        "are you sure",
+        "go deeper",
+        "explain it",
+        "explain that",
+        "what do you mean",
+        "why?",
+        "how so",
+        "that",
+        "this",
+        "i never said",
+    )
+    return (
+        len(text.split()) <= 8
+        and any(marker in text for marker in followup_markers)
+    )
+
+
 def build_history_prompt(history, tokenizer, context_length):
-    recent = history[-7:]
+    current_user = history[-1][1]
+    if not should_use_history(current_user):
+        ids = tokenizer.encode(
+            f"User: {current_user}\nAssistant:"
+        )
+        return ids[-context_length:]
+
+    recent = history[-5:]
     token_ids = []
     pending_user = None
 
@@ -123,7 +178,6 @@ def build_history_prompt(history, tokenizer, context_length):
             )
             pending_user = None
 
-    current_user = recent[-1][1]
     token_ids.extend(
         tokenizer.encode(
             f"User: {current_user}\nAssistant:"
