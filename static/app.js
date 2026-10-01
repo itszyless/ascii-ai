@@ -11,6 +11,8 @@ const statusDot = document.getElementById("statusDot");
 const statusTitle = document.getElementById("statusTitle");
 const statusSub = document.getElementById("statusSub");
 const sidebar = document.getElementById("sidebar");
+const toggleSidebar = document.getElementById("toggleSidebar");
+const desktopSidebarOpen = document.getElementById("desktopSidebarOpen");
 const renameModal = document.getElementById("renameModal");
 const renameInput = document.getElementById("renameInput");
 const renameSave = document.getElementById("renameSave");
@@ -529,6 +531,30 @@ input.addEventListener("keydown", event => {
 newChatBtn.onclick = createChat;
 document.getElementById("openSidebar").onclick = () => sidebar.classList.add("open");
 document.getElementById("closeSidebar").onclick = () => sidebar.classList.remove("open");
+
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  localStorage.setItem("orcaSidebarCollapsed", collapsed ? "1" : "0");
+}
+
+toggleSidebar.onclick = () => {
+  setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+};
+
+desktopSidebarOpen.onclick = () => {
+  setSidebarCollapsed(false);
+};
+
+if (localStorage.getItem("orcaSidebarCollapsed") === "1") {
+  setSidebarCollapsed(true);
+}
+
+document.addEventListener("keydown", event => {
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+  }
+});
 
 function closeSidebarOnMobile() {
   if (window.innerWidth <= 760) sidebar.classList.remove("open");
