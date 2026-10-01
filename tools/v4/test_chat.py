@@ -94,15 +94,33 @@ def clean_reply(text):
 
 def build_history_prompt(history, tokenizer, context_length):
     recent = history[-7:]
-    parts = []
-    for role, content in recent:
+    token_ids = []
+    pending_user = None
+
+    for role, content in recent[:-1]:
         if role == "user":
-            parts.append(f"User: {content}")
-        else:
-            parts.append(f"Assistant: {content}")
-    parts.append("Assistant:")
-    ids = tokenizer.encode("\n".join(parts))
-    return ids[-context_length:]
+            pending_user = content
+        elif role == "assistant" and pending_user is not None:
+            token_ids.extend(
+                tokenizer.encode(
+                    f"User: {pending_user}\nAssistant:"
+                )
+            )
+            token_ids.extend(
+                tokenizer.encode(
+                    f" {content}",
+                    add_eos=True,
+                )
+            )
+            pending_user = None
+
+    current_user = recent[-1][1]
+    token_ids.extend(
+        tokenizer.encode(
+            f"User: {current_user}\nAssistant:"
+        )
+    )
+    return token_ids[-context_length:]
 
 
 @torch.inference_mode()
