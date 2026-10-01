@@ -30,7 +30,7 @@ const icons = {
   down: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 14V4H4v10h3Zm3-10h7.2a2 2 0 0 1 1.9 1.37l2 6A2 2 0 0 1 19.2 14H15l.7 3.5A2.1 2.1 0 0 1 13.64 20H13l-4-6V4Z"/></svg>',
   share: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
   download: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>',
-  speak: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 10v4h4l5 4V6l-5 4H5Z"/><path d="M17 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10"/></svg>',
+  speak: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9.5a3.5 3.5 0 0 1 0 5"/><path d="M18.5 7a7 7 0 0 1 0 10"/></svg>',
   regen: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M19 11a7 7 0 1 0 .2 5"/></svg>'
 };
 
@@ -533,8 +533,12 @@ document.getElementById("openSidebar").onclick = () => sidebar.classList.add("op
 document.getElementById("closeSidebar").onclick = () => sidebar.classList.remove("open");
 
 function setSidebarCollapsed(collapsed) {
+  document.body.classList.add("sidebar-animating");
   document.body.classList.toggle("sidebar-collapsed", collapsed);
   localStorage.setItem("orcaSidebarCollapsed", collapsed ? "1" : "0");
+  window.setTimeout(() => {
+    document.body.classList.remove("sidebar-animating");
+  }, 320);
 }
 
 toggleSidebar.onclick = () => {
