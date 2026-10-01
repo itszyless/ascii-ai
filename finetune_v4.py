@@ -4,6 +4,7 @@ Do not run this until test_v4.py shows coherent, relevant continuations.
 """
 
 from pathlib import Path
+import json
 import random
 import re
 import time
@@ -16,7 +17,8 @@ from model_v4 import OrcaAIv4
 from tokenizer import LocalTokenizer
 
 
-CHAT_PATH = Path("data/chat.txt")\nCURATED_CHAT_PATH = Path("data/chat_v4_curated.jsonl")
+CHAT_PATH = Path("data/chat.txt")
+CURATED_CHAT_PATH = Path("data/chat_v4_curated.jsonl")
 FINEWEB_PATH = Path("data/fineweb_v4.bin")
 WIKI_PATH = Path("data/wikipedia_v4.bin")
 GROUNDED_MODEL_PATH = Path("checkpoints/model_v4_grounded.pt")
