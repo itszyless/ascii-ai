@@ -23,7 +23,8 @@ COMMANDS = {
     "diagnose": "tools/v4/diagnose.py",
     "diagnose-unseen": "tools/v4/diagnose_unseen.py",
     "knowledge": "tools/v4/continue_knowledge.py",
-    "benchmark-knowledge": "tools/v4/benchmark_knowledge.py",\n    "analyze-knowledge": "tools/v4/analyze_knowledge.py",
+    "benchmark-knowledge": "tools/v4/benchmark_knowledge.py",
+    "analyze-knowledge": "tools/v4/analyze_knowledge.py",
     "web": "web_app.py",
 }
 
@@ -44,7 +45,8 @@ def print_help():
         "diagnose": "compare v4 checkpoints on the main diagnostic",
         "diagnose-unseen": "test grounding on held-out facts",
         "knowledge": "run/resume knowledge-focused continued pretraining",
-        "benchmark-knowledge": "long held-out + generation sweep benchmark",\n        "analyze-knowledge": "summarize the latest knowledge benchmark",
+        "benchmark-knowledge": "long held-out + generation sweep benchmark",
+        "analyze-knowledge": "summarize the latest knowledge benchmark",
         "finetune": "run v4 chat fine-tuning when the base is ready",
         "web": "start the local OrcaAI web app",
     }
