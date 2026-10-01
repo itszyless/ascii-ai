@@ -57,6 +57,19 @@ def load_curated_examples(path):
         if not line:
             continue
         item = json.loads(line)
+
+        turns = item.get("turns")
+        if isinstance(turns, list):
+            conversation = []
+            for turn in turns:
+                user = str(turn.get("user", "")).strip()
+                assistant = str(turn.get("assistant", "")).strip()
+                if user and assistant:
+                    conversation.append((user, assistant))
+            if conversation:
+                rows.append(conversation)
+            continue
+
         user = str(item.get("user", "")).strip()
         assistant = str(item.get("assistant", "")).strip()
         if user and assistant:
