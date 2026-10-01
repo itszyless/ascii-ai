@@ -228,26 +228,49 @@ For the current CUDA setup:
 py -3.12 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 ```
 
-## Main files
+## Project layout
+
+The root is intentionally kept small. Active training utilities and diagnostics live under `tools/v4/`, while old v3 training scripts are archived under `legacy/v3/`.
+
+Use the command launcher for normal work:
+
+```powershell
+py -3.12 orca.py help
+```
+
+Common commands:
+
+```powershell
+py -3.12 orca.py train
+py -3.12 orca.py test
+py -3.12 orca.py diagnose-unseen
+py -3.12 orca.py knowledge
+py -3.12 orca.py benchmark-knowledge
+py -3.12 orca.py web
+```
+
+Main layout:
 
 ```text
-model.py              v1-v3 Transformer
-model_v4.py           v4 Transformer
+orca.py               single command launcher
+model.py              legacy-compatible v1-v3 Transformer
+model_v4.py           active v4 Transformer
 tokenizer.py          byte-level BPE tokenizer
-
-prepare_v4.py         v4 data preparation
-train_v4.py           v4 pretraining
-test_v4.py            v4 base-model test
-finetune_v4.py        v4 chat fine-tuning
-
-web_app.py            local web app
+web_app.py            local OrcaAI web app
 lab_api.py            Model Lab backend
 quality_layer.py      retrieval + response ranking
 
+prepare_v4.py         one-time v4 corpus preparation
+train_v4.py           base v4 pretraining
+test_v4.py            base-model sanity test
+finetune_v4.py        chat fine-tuning
+
+tools/v4/             grounding, diagnostics, knowledge runs, benchmarks
+legacy/v3/            archived v3 training scripts
 templates/            web UI
-static/               UI assets + OrcaAI mark
-data/                 local training/chat data
-checkpoints/          local model/tokenizer checkpoints
+static/               UI assets
+data/                 local datasets/reports (gitignored)
+checkpoints/          local model/tokenizer checkpoints (gitignored)
 ```
 
 ## What the model is actually learning
