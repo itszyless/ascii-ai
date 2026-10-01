@@ -344,6 +344,11 @@ def main():
         ),
     )
     parser.add_argument(
+        "--grounded",
+        action="store_true",
+        help="Also evaluate checkpoints/model_v4_grounded.pt.",
+    )
+    parser.add_argument(
         "--latest-only",
         action="store_true",
         help="Evaluate only model_v4.pt.",
@@ -366,6 +371,13 @@ def main():
         targets.append(("BEST", BEST_PATH))
     if LATEST_PATH.exists():
         targets.append(("LATEST", LATEST_PATH))
+    if args.grounded:
+        if not GROUNDED_PATH.exists():
+            raise FileNotFoundError(
+                "Missing checkpoints/model_v4_grounded.pt. "
+                "Run: py -3.12 ground_v4.py"
+            )
+        targets.append(("GROUNDED", GROUNDED_PATH))
 
     if not targets:
         raise FileNotFoundError(
