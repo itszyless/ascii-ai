@@ -52,6 +52,7 @@ _model = None
 _tokenizer = None
 _device = None
 _model_path = None
+_model_signature = None
 _generation_lock = threading.Lock()
 _store_lock = threading.Lock()
 
@@ -84,6 +85,14 @@ def find_chat(store, chat_id):
     return next((c for c in store["chats"] if c["id"] == chat_id), None)
 
 
+def checkpoint_signature(path):
+    try:
+        stat = path.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return None
+
+
 def choose_model():
     if V4_CHAT_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
         return V4_CHAT_MODEL_PATH, V4_TOKENIZER_PATH, "v4", True
@@ -112,13 +121,18 @@ def choose_model():
 
 
 def load_model():
-    global _model, _tokenizer, _device, _model_path
+    global _model, _tokenizer, _device, _model_path, _model_signature
 
     chosen, tokenizer_path, version, _ = choose_model()
     if chosen is None:
         raise FileNotFoundError("No compatible OrcaAI checkpoint found.")
 
-    if _model is not None and _model_path == chosen:
+    signature = checkpoint_signature(chosen)
+    if (
+        _model is not None
+        and _model_path == chosen
+        and _model_signature == signature
+    ):
         return
 
     requested = os.getenv("LOCALAI_DEVICE", "").strip().lower()
@@ -142,6 +156,7 @@ def load_model():
     _tokenizer = tokenizer
     _device = device
     _model_path = chosen
+    _model_signature = signature
 
 
 def build_history_prompt(messages):
@@ -185,6 +200,49 @@ def build_history_prompt(messages):
     return token_ids[-_model.context_length:]
 
 
+def polish_reply(response):
+    response = response.strip()
+    if not response:
+        return response
+
+    replacements = {
+        "orcaai": "OrcaAI",
+        "ram": "RAM",
+        "cpu": "CPU",
+        "gpu": "GPU",
+        "ssd": "SSD",
+        "html": "HTML",
+        "css": "CSS",
+        "h2o": "H2O",
+    }
+
+    words = response.split()
+    for index, word in enumerate(words):
+        prefix = ""
+        suffix = ""
+        core = word
+
+        while core and not core[0].isalnum():
+            prefix += core[0]
+            core = core[1:]
+        while core and not core[-1].isalnum():
+            suffix = core[-1] + suffix
+            core = core[:-1]
+
+        replacement = replacements.get(core.lower())
+        if replacement:
+            words[index] = prefix + replacement + suffix
+
+    response = " ".join(words)
+
+    for index, char in enumerate(response):
+        if char.isalpha():
+            response = response[:index] + char.upper() + response[index + 1:]
+            break
+
+    return response
+
+
 def _decode_candidate(generated, prompt_length):
     new_tokens = generated[0, prompt_length:].tolist()
     response = _tokenizer.decode(new_tokens)
@@ -193,7 +251,7 @@ def _decode_candidate(generated, prompt_length):
         if marker in response:
             response = response.split(marker, 1)[0]
 
-    return response.strip()
+    return polish_reply(response)
 
 
 def generate_reply(messages):
