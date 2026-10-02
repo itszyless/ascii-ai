@@ -8,6 +8,7 @@ import logging
 import os
 from pathlib import Path
 import threading
+import tempfile
 import uuid
 
 from flask import Flask, jsonify, render_template, request
@@ -60,6 +61,8 @@ _model_path = None
 _model_signature = None
 _generation_lock = threading.Lock()
 _store_lock = threading.Lock()
+_whisper_model = None
+_whisper_lock = threading.Lock()
 
 
 def now_iso():
