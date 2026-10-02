@@ -31,6 +31,8 @@ COMMANDS = {
     "prepare-v5": "prepare_v5.py",
     "train-v5": "train_v5.py",
     "test-v5": "test_v5.py",
+    "prepare-v5-boost": "prepare_v5_boost.py",
+    "boost-v5": "boost_v5.py",
 }
 
 
@@ -58,7 +60,9 @@ def print_help():
         "web": "start the local OrcaAI web app",
         "prepare-v5": "prepare the larger v5 tokenizer and 1.5B-token corpus",
         "train-v5": "start/resume larger v5 base pretraining",
-        "test-v5": "interactive v5 base-model test",
+        "test-v5": "interactive v5/boost base-model test",
+        "prepare-v5-boost": "prepare multilingual + arithmetic continuation data",
+        "boost-v5": "continue v5 on multilingual text and arithmetic",
     }
     width = max(len(name) for name in COMMANDS)
     for name in COMMANDS:
