@@ -657,18 +657,36 @@ async function refreshChats() {
   renderSidebar();
 }
 
-async function createChat() {
-  if (state.activeChatId) {
-    try {
-      const current = await api(`/api/chats/${state.activeChatId}`);
-      if (!current.messages || current.messages.length === 0) {
-        input.focus();
-        closeSidebarOnMobile();
-        return current;
-      }
-    } catch {}
+function setChatRoute(chat, replace = false) {
+  const url = chat?.id ? `/c/${encodeURIComponent(chat.id)}` : "/";
+  document.title = chat?.title || "OrcaAI";
+
+  const method = replace ? "replaceState" : "pushState";
+  history[method]({ chatId: chat?.id || null }, "", url);
+}
+
+function showNewChat(pushRoute = true) {
+  if (!state.activeChatId && welcome.style.display !== "none") {
+    input.focus();
+    return;
   }
 
+  state.activeChatId = null;
+  messages.innerHTML = "";
+  welcome.style.display = "grid";
+  renderSidebar();
+  if (pushRoute) setChatRoute(null);
+  else document.title = "OrcaAI";
+  input.focus();
+  closeSidebarOnMobile();
+}
+
+function chatIdFromPath() {
+  const match = window.location.pathname.match(/^\/c\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function createChat() {
   const chat = await api("/api/chats", {
     method: "POST",
     body: "{}",
@@ -677,17 +695,20 @@ async function createChat() {
   state.activeChatId = chat.id;
   await refreshChats();
   renderMessages(chat);
+  setChatRoute(chat);
   input.focus();
   closeSidebarOnMobile();
   return chat;
 }
 
-async function openChat(id) {
+async function openChat(id, options = {}) {
   state.activeChatId = id;
   const chat = await api(`/api/chats/${id}`);
   renderSidebar();
   renderMessages(chat);
+  setChatRoute(chat, Boolean(options.replace));
   closeSidebarOnMobile();
+  return chat;
 }
 
 async function deleteChat(id) {
@@ -697,6 +718,7 @@ async function deleteChat(id) {
     state.activeChatId = null;
     messages.innerHTML = "";
     welcome.style.display = "grid";
+    setChatRoute(null, true);
   }
 
   await refreshChats();
