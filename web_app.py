@@ -486,6 +486,9 @@ def delete_chat(chat_id):
 def send_message(chat_id):
     payload = request.get_json(silent=True) or {}
     content = str(payload.get("message") or "").strip()
+    effort = str(payload.get("effort") or "medium").lower()
+    if effort not in {"instant", "medium", "high"}:
+        effort = "medium"
 
     if not content:
         return jsonify({"error": "Message cannot be empty"}), 400
@@ -513,7 +516,7 @@ def send_message(chat_id):
         snapshot = list(chat["messages"])
 
     try:
-        reply = generate_reply(snapshot)
+        reply = generate_reply(snapshot, effort=effort)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -547,6 +550,9 @@ def send_message(chat_id):
 def regenerate(chat_id):
     payload = request.get_json(silent=True) or {}
     message_id = payload.get("message_id")
+    effort = str(payload.get("effort") or "medium").lower()
+    if effort not in {"instant", "medium", "high"}:
+        effort = "medium"
 
     with _store_lock:
         store = load_store()
@@ -577,7 +583,7 @@ def regenerate(chat_id):
         snapshot = list(chat["messages"])
 
     try:
-        reply = generate_reply(snapshot)
+        reply = generate_reply(snapshot, effort=effort)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -600,6 +606,82 @@ def regenerate(chat_id):
         save_store(store)
 
     return jsonify({"message": message})
+
+
+def get_whisper_model():
+    global _whisper_model
+
+    if _whisper_model is not None:
+        return _whisper_model
+
+    with _whisper_lock:
+        if _whisper_model is None:
+            try:
+                from faster_whisper import WhisperModel
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Local voice transcription needs faster-whisper. "
+                    "Run: py -3.12 -m pip install faster-whisper"
+                ) from exc
+
+            model_name = os.getenv("ORCA_WHISPER_MODEL", "small.en")
+            _whisper_model = WhisperModel(
+                model_name,
+                device="cpu",
+                compute_type="int8",
+            )
+
+    return _whisper_model
+
+
+@app.post("/api/transcribe")
+def transcribe_audio():
+    audio = request.files.get("audio")
+    if audio is None or not audio.filename:
+        return jsonify({"error": "No audio recording received"}), 400
+
+    if request.content_length and request.content_length > 25 * 1024 * 1024:
+        return jsonify({"error": "Recording is too large"}), 413
+
+    suffix = Path(audio.filename).suffix or ".webm"
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            prefix="orca_voice_",
+            suffix=suffix,
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            audio.save(temp_file)
+
+        model = get_whisper_model()
+        with _whisper_lock:
+            segments, info = model.transcribe(
+                str(temp_path),
+                beam_size=5,
+                vad_filter=True,
+                language="en",
+                condition_on_previous_text=False,
+            )
+            text = " ".join(
+                segment.text.strip()
+                for segment in segments
+                if segment.text.strip()
+            ).strip()
+
+        return jsonify({
+            "text": text,
+            "language": getattr(info, "language", "en"),
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 @app.post("/api/chats/<chat_id>/messages/<message_id>/rating")
