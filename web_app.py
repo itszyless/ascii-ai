@@ -662,13 +662,18 @@ def transcribe_audio():
             temp_path = Path(temp_file.name)
             audio.save(temp_file)
 
+        partial = str(request.form.get("partial") or "").lower() in {
+            "1", "true", "yes"
+        }
+
         model = get_whisper_model()
         with _whisper_lock:
             segments, info = model.transcribe(
                 str(temp_path),
-                beam_size=5,
+                beam_size=1 if partial else 5,
                 vad_filter=True,
                 condition_on_previous_text=False,
+                temperature=0.0,
             )
             text = " ".join(
                 segment.text.strip()
