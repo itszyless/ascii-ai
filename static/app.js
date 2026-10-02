@@ -82,6 +82,151 @@ function escapeHtml(value) {
 }
 
 
+const tooltipShortcuts = new Map([
+  ["toggleSidebar", "Ctrl+Shift+S"],
+  ["desktopSidebarOpen", "Ctrl+Shift+S"],
+  ["effortButton", "Ctrl+Shift+M"],
+  ["micBtn", "Ctrl+Shift+D"],
+  ["newChat", "Ctrl+Shift+O"],
+]);
+
+const tooltipLabels = new Map([
+  ["toggleSidebar", "Toggle sidebar"],
+  ["desktopSidebarOpen", "Toggle sidebar"],
+  ["openSidebar", "Open sidebar"],
+  ["closeSidebar", "Close sidebar"],
+  ["effortButton", "Thinking effort"],
+  ["micBtn", "Dictate"],
+  ["newChat", "New chat"],
+  ["sendBtn", "Send"],
+  ["voiceCancel", "Cancel"],
+  ["voiceStop", "Stop recording"],
+  ["voiceSave", "Use transcription"],
+]);
+
+const tooltip = document.createElement("div");
+tooltip.className = "orca-tooltip";
+tooltip.hidden = true;
+tooltip.innerHTML = '<span class="orca-tooltip-label"></span><span class="orca-tooltip-shortcut" hidden></span>';
+document.body.appendChild(tooltip);
+
+const tooltipLabel = tooltip.querySelector(".orca-tooltip-label");
+const tooltipShortcut = tooltip.querySelector(".orca-tooltip-shortcut");
+
+let tooltipShowTimer = null;
+let tooltipHideTimer = null;
+let tooltipTarget = null;
+
+function tooltipAllowed() {
+  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
+
+function prepareTooltipTarget(element) {
+  if (!element || element.closest(".chat-edit, .chat-delete, .chat-open")) return null;
+
+  if (element.id && tooltipLabels.has(element.id)) {
+    element.dataset.tooltip = tooltipLabels.get(element.id);
+  } else if (!element.dataset.tooltip && element.getAttribute("title")) {
+    element.dataset.tooltip = element.getAttribute("title");
+  }
+
+  if (element.dataset.tooltip) {
+    element.removeAttribute("title");
+    return element;
+  }
+
+  return null;
+}
+
+function findTooltipTarget(node) {
+  if (!(node instanceof Element)) return null;
+  const element = node.closest("[data-tooltip], [title], button");
+  return prepareTooltipTarget(element);
+}
+
+function positionTooltip(target) {
+  const rect = target.getBoundingClientRect();
+  const tipRect = tooltip.getBoundingClientRect();
+  const margin = 8;
+
+  let left = rect.left + rect.width / 2 - tipRect.width / 2;
+  left = Math.max(margin, Math.min(left, window.innerWidth - tipRect.width - margin));
+
+  let top = rect.top - tipRect.height - 9;
+  let placement = "top";
+
+  if (top < margin) {
+    top = rect.bottom + 9;
+    placement = "bottom";
+  }
+
+  tooltip.dataset.placement = placement;
+  tooltip.style.left = Math.round(left) + "px";
+  tooltip.style.top = Math.round(top) + "px";
+}
+
+function showTooltip(target) {
+  if (!tooltipAllowed() || !target?.dataset.tooltip) return;
+
+  clearTimeout(tooltipHideTimer);
+  tooltipTarget = target;
+  tooltipLabel.textContent = target.dataset.tooltip;
+
+  const shortcut = target.id ? tooltipShortcuts.get(target.id) : null;
+  tooltipShortcut.hidden = !shortcut;
+  tooltipShortcut.textContent = shortcut || "";
+
+  tooltip.hidden = false;
+  requestAnimationFrame(() => {
+    positionTooltip(target);
+    tooltip.classList.add("visible");
+  });
+}
+
+function scheduleTooltip(target) {
+  if (!tooltipAllowed() || !target?.dataset.tooltip) return;
+  clearTimeout(tooltipShowTimer);
+  clearTimeout(tooltipHideTimer);
+  tooltipShowTimer = window.setTimeout(() => showTooltip(target), 750);
+}
+
+function hideTooltip() {
+  clearTimeout(tooltipShowTimer);
+  clearTimeout(tooltipHideTimer);
+  tooltipTarget = null;
+  tooltip.classList.remove("visible");
+  tooltipHideTimer = window.setTimeout(() => {
+    if (!tooltip.classList.contains("visible")) tooltip.hidden = true;
+  }, 120);
+}
+
+document.addEventListener("pointerover", event => {
+  const target = findTooltipTarget(event.target);
+  if (!target) return;
+  if (target.contains(event.relatedTarget)) return;
+  scheduleTooltip(target);
+});
+
+document.addEventListener("pointerout", event => {
+  if (!tooltipTarget && !tooltipShowTimer) return;
+  const target = findTooltipTarget(event.target);
+  if (!target) return;
+  if (target.contains(event.relatedTarget)) return;
+  hideTooltip();
+});
+
+document.addEventListener("focusin", event => {
+  const target = findTooltipTarget(event.target);
+  if (target) scheduleTooltip(target);
+});
+
+document.addEventListener("focusout", hideTooltip);
+
+window.addEventListener("resize", () => {
+  if (tooltipTarget && !tooltip.hidden) positionTooltip(tooltipTarget);
+});
+
+
 const effortCopy = {
   instant: { label: "Instant", value: 0 },
   medium: { label: "Medium", value: 1 },
@@ -519,7 +664,6 @@ function renderSidebar() {
 
     const edit = document.createElement("button");
     edit.className = "chat-edit";
-    edit.title = "Rename chat";
     edit.setAttribute("aria-label", "Rename chat");
     edit.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
     edit.onclick = event => {
@@ -529,7 +673,6 @@ function renderSidebar() {
 
     const del = document.createElement("button");
     del.className = "chat-delete";
-    del.title = "Delete chat";
     del.setAttribute("aria-label", "Delete chat");
     del.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg>';
     del.onclick = event => {
@@ -546,7 +689,7 @@ function actionButton(icon, title, fn) {
   const button = document.createElement("button");
   button.className = "response-action";
   button.type = "button";
-  button.title = title;
+  button.dataset.tooltip = title;
   button.setAttribute("aria-label", title);
   button.innerHTML = icons[icon];
   button.onclick = fn;
@@ -560,11 +703,11 @@ function addActions(contentWrap, message, messageRow) {
   const copy = actionButton("copy", "Copy", async () => {
     await navigator.clipboard.writeText(message.content);
     copy.innerHTML = icons.check;
-    copy.title = "Copied";
+    copy.dataset.tooltip = "Copied";
     copy.setAttribute("aria-label", "Copied");
     setTimeout(() => {
       copy.innerHTML = icons.copy;
-      copy.title = "Copy";
+      copy.dataset.tooltip = "Copy";
       copy.setAttribute("aria-label", "Copy");
     }, 900);
   });
