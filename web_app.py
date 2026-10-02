@@ -493,9 +493,9 @@ def delete_chat(chat_id):
 def send_message(chat_id):
     payload = request.get_json(silent=True) or {}
     content = str(payload.get("message") or "").strip()
-    effort = str(payload.get("effort") or "medium").lower()
+    effort = str(payload.get("effort") or "instant").lower()
     if effort not in {"instant", "medium", "high"}:
-        effort = "medium"
+        effort = "instant"
 
     if not content:
         return jsonify({"error": "Message cannot be empty"}), 400
@@ -557,9 +557,9 @@ def send_message(chat_id):
 def regenerate(chat_id):
     payload = request.get_json(silent=True) or {}
     message_id = payload.get("message_id")
-    effort = str(payload.get("effort") or "medium").lower()
+    effort = str(payload.get("effort") or "instant").lower()
     if effort not in {"instant", "medium", "high"}:
-        effort = "medium"
+        effort = "instant"
 
     with _store_lock:
         store = load_store()
