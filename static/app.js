@@ -2,7 +2,7 @@ const state = {
   chats: [],
   activeChatId: null,
   sending: false,
-  effort: localStorage.getItem("orcaThinkingEffort") || "medium",
+  effort: localStorage.getItem("orcaThinkingEffort") || "instant",
   recording: false,
   transcribing: false,
 };
@@ -31,7 +31,8 @@ const effortPicker = document.getElementById("effortPicker");
 const effortButton = document.getElementById("effortButton");
 const effortLabel = document.getElementById("effortLabel");
 const effortPopover = document.getElementById("effortPopover");
-const effortHint = document.getElementById("effortHint");
+const effortCurrent = document.getElementById("effortCurrent");
+const effortTrack = document.getElementById("effortTrack");
 const micBtn = document.getElementById("micBtn");
 const voicePanel = document.getElementById("voicePanel");
 const voiceWave = document.getElementById("voiceWave");
@@ -77,30 +78,44 @@ function escapeHtml(value) {
 
 
 const effortCopy = {
-  instant: { label: "Instant", hint: "Fastest response" },
-  medium: { label: "Medium", hint: "Balanced speed and quality" },
-  high: { label: "High", hint: "More local inference for the best candidate" },
+  instant: { label: "Instant", value: 0 },
+  medium: { label: "Medium", value: 1 },
+  high: { label: "High", value: 2 },
 };
 
+const effortLevels = ["instant", "medium", "high"];
+let draggingEffort = false;
+
 function setEffort(level) {
-  if (!effortCopy[level]) level = "medium";
+  if (!effortCopy[level]) level = "instant";
   state.effort = level;
   localStorage.setItem("orcaThinkingEffort", level);
   effortPicker.dataset.effort = level;
-  effortLabel.textContent = effortCopy[level].label;
-  effortHint.textContent = effortCopy[level].hint;
-
-  for (const option of effortPopover.querySelectorAll("[data-effort-option]")) {
-    const selected = option.dataset.effortOption === level;
-    option.classList.toggle("selected", selected);
-    option.setAttribute("aria-checked", selected ? "true" : "false");
-  }
+  effortCurrent.textContent = effortCopy[level].label;
+  effortTrack.setAttribute("aria-valuenow", String(effortCopy[level].value));
+  effortTrack.style.removeProperty("--effort-position");
+  effortLabel.textContent = effortPicker.classList.contains("open")
+    ? "Thinking effort"
+    : effortCopy[level].label;
 }
 
 function setEffortOpen(open) {
   effortPopover.hidden = !open;
   effortButton.setAttribute("aria-expanded", open ? "true" : "false");
   effortPicker.classList.toggle("open", open);
+  effortLabel.textContent = open ? "Thinking effort" : effortCopy[state.effort].label;
+}
+
+function effortFromClientX(clientX, commit = false) {
+  const rect = effortTrack.getBoundingClientRect();
+  const position = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(rect.width, 1)));
+  effortTrack.style.setProperty("--effort-position", (position * 100) + "%");
+
+  const index = Math.max(0, Math.min(2, Math.round(position * 2)));
+  const level = effortLevels[index];
+  effortCurrent.textContent = effortCopy[level].label;
+
+  if (commit) setEffort(level);
 }
 
 effortButton.addEventListener("click", event => {
@@ -108,12 +123,44 @@ effortButton.addEventListener("click", event => {
   setEffortOpen(effortPopover.hidden);
 });
 
-for (const option of effortPopover.querySelectorAll("[data-effort-option]")) {
-  option.addEventListener("click", () => {
-    setEffort(option.dataset.effortOption);
-    window.setTimeout(() => setEffortOpen(false), 120);
-  });
-}
+effortTrack.addEventListener("pointerdown", event => {
+  draggingEffort = true;
+  if (effortTrack.setPointerCapture) effortTrack.setPointerCapture(event.pointerId);
+  effortFromClientX(event.clientX, false);
+});
+
+effortTrack.addEventListener("pointermove", event => {
+  if (!draggingEffort) return;
+  effortFromClientX(event.clientX, false);
+});
+
+effortTrack.addEventListener("pointerup", event => {
+  if (!draggingEffort) return;
+  draggingEffort = false;
+  effortFromClientX(event.clientX, true);
+});
+
+effortTrack.addEventListener("pointercancel", () => {
+  draggingEffort = false;
+  setEffort(state.effort);
+});
+
+effortTrack.addEventListener("keydown", event => {
+  const current = effortCopy[state.effort].value;
+  if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+    event.preventDefault();
+    setEffort(effortLevels[Math.max(0, current - 1)]);
+  } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+    event.preventDefault();
+    setEffort(effortLevels[Math.min(2, current + 1)]);
+  } else if (event.key === "Home") {
+    event.preventDefault();
+    setEffort("instant");
+  } else if (event.key === "End") {
+    event.preventDefault();
+    setEffort("high");
+  }
+});
 
 document.addEventListener("click", event => {
   if (!effortPicker.contains(event.target)) setEffortOpen(false);
