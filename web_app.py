@@ -51,6 +51,8 @@ QUALITY_CANDIDATES = 1
 # Keep the terminal clean: Flask/Werkzeug normally prints one line for every
 # browser request. Errors still surface through the app/API itself.
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -386,6 +388,11 @@ def index():
     return render_template("index.html")
 
 
+@app.get("/c/<chat_id>")
+def chat_page(chat_id):
+    return render_template("index.html")
+
+
 @app.get("/api/status")
 def status():
     path, tokenizer_path, version, chat_tuned = choose_model()
@@ -420,7 +427,7 @@ def create_chat():
     stamp = now_iso()
 
     chat = {
-        "id": uuid.uuid4().hex,
+        "id": str(uuid.uuid4()),
         "title": title,
         "created_at": stamp,
         "updated_at": stamp,
