@@ -254,6 +254,110 @@ function cleanupVoiceStream() {
   mediaRecorder = null;
 }
 
+function stopLiveTranscription() {
+  if (voiceLiveTimer) {
+    clearInterval(voiceLiveTimer);
+    voiceLiveTimer = null;
+  }
+  voicePartialBusy = false;
+}
+
+function buildVoiceInsertedValue(text) {
+  const value = voiceOriginalValue;
+  const start = Math.min(voiceInsertStart, value.length);
+  const end = Math.min(Math.max(voiceInsertEnd, start), value.length);
+
+  const before = value.slice(0, start);
+  const after = value.slice(end);
+  const clean = String(text || "").trim();
+
+  if (!clean) {
+    return {
+      value,
+      caret: start,
+    };
+  }
+
+  const needsLeadingSpace =
+    before &&
+    !/\s$/.test(before) &&
+    !/^[,.;!?]/.test(clean);
+  const needsTrailingSpace =
+    after &&
+    !/^\s/.test(after) &&
+    !/[\s([{]$/.test(clean);
+
+  const inserted =
+    (needsLeadingSpace ? " " : "") +
+    clean +
+    (needsTrailingSpace ? " " : "");
+
+  return {
+    value: before + inserted + after,
+    caret: before.length + inserted.length,
+  };
+}
+
+function renderVoiceTranscript(text) {
+  const clean = String(text || "").trim();
+  if (!clean) return;
+
+  voiceLastPartial = clean;
+  const rendered = buildVoiceInsertedValue(clean);
+  input.value = rendered.value;
+  resizeInput();
+  input.setSelectionRange(rendered.caret, rendered.caret);
+}
+
+async function transcribeVoiceBlob(blob, partial, session) {
+  if (!blob?.size) return null;
+
+  const extension = blob.type.includes("ogg") ? "ogg" : "webm";
+  const form = new FormData();
+  form.append("audio", blob, `recording.${extension}`);
+  if (partial) form.append("partial", "1");
+
+  const response = await fetch("/api/transcribe", {
+    method: "POST",
+    body: form,
+  });
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.error || "Voice transcription failed.");
+  }
+
+  if (session !== voiceSession) return null;
+  return (result.text || "").trim();
+}
+
+async function updateLiveTranscript(session) {
+  if (
+    session !== voiceSession ||
+    !state.recording ||
+    voicePartialBusy ||
+    voiceChunks.length < 2
+  ) {
+    return;
+  }
+
+  voicePartialBusy = true;
+  try {
+    const type = mediaRecorder?.mimeType || voiceChunks[0]?.type || "audio/webm";
+    const blob = new Blob([...voiceChunks], { type });
+    const text = await transcribeVoiceBlob(blob, true, session);
+
+    if (text && session === voiceSession && state.recording) {
+      renderVoiceTranscript(text);
+    }
+  } catch {
+    // Partial transcription is best-effort. Final transcription still runs
+    // when the user stops recording.
+  } finally {
+    voicePartialBusy = false;
+  }
+}
+
 async function startVoiceRecording() {
   if (state.recording || state.transcribing) return;
 
@@ -264,7 +368,11 @@ async function startVoiceRecording() {
 
   voiceInsertStart = input.selectionStart ?? input.value.length;
   voiceInsertEnd = input.selectionEnd ?? voiceInsertStart;
+  voiceOriginalValue = input.value;
+  voiceLastPartial = "";
   voiceChunks = [];
+  voiceSession += 1;
+  const session = voiceSession;
 
   try {
     voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -282,24 +390,38 @@ async function startVoiceRecording() {
       if (event.data?.size) voiceChunks.push(event.data);
     });
 
-    mediaRecorder.start(120);
+    mediaRecorder.start(160);
+    input.readOnly = true;
     setVoiceUi(true, false);
     startVoiceMeter(voiceStream);
+
+    voiceLiveTimer = window.setInterval(() => {
+      updateLiveTranscript(session);
+    }, 1600);
   } catch (error) {
+    stopLiveTranscription();
     cleanupVoiceStream();
+    input.readOnly = false;
     setVoiceUi(false, false);
     alert(error?.message || "Microphone access failed.");
   }
 }
 
 function discardVoiceRecording() {
+  voiceSession += 1;
+  stopLiveTranscription();
+
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.ondataavailable = null;
     mediaRecorder.stop();
   }
+
   voiceChunks = [];
   cleanupVoiceStream();
   setVoiceUi(false, false);
+
+  input.readOnly = false;
+  input.value = voiceOriginalValue;
+  resizeInput();
   input.focus();
   input.setSelectionRange(voiceInsertStart, voiceInsertEnd);
 }
@@ -308,48 +430,28 @@ function stopRecorderToBlob() {
   return new Promise(resolve => {
     if (!mediaRecorder || mediaRecorder.state === "inactive") {
       const type = voiceChunks[0]?.type || "audio/webm";
-      resolve(new Blob(voiceChunks, { type }));
+      resolve(new Blob([...voiceChunks], { type }));
       return;
     }
 
-    mediaRecorder.addEventListener("stop", () => {
-      const type = mediaRecorder?.mimeType || voiceChunks[0]?.type || "audio/webm";
-      resolve(new Blob(voiceChunks, { type }));
+    const recorder = mediaRecorder;
+    recorder.addEventListener("stop", () => {
+      const type = recorder.mimeType || voiceChunks[0]?.type || "audio/webm";
+      resolve(new Blob([...voiceChunks], { type }));
     }, { once: true });
 
-    mediaRecorder.stop();
+    recorder.stop();
   });
-}
-
-function insertTranscript(text) {
-  if (!text) return;
-  const value = input.value;
-  const start = Math.min(voiceInsertStart, value.length);
-  const end = Math.min(Math.max(voiceInsertEnd, start), value.length);
-
-  const before = value.slice(0, start);
-  const after = value.slice(end);
-  const needsLeadingSpace = before && !/\s$/.test(before) && !/^[,.;!?]/.test(text);
-  const needsTrailingSpace = after && !/^\s/.test(after) && !/[\s([{]$/.test(text);
-
-  const inserted =
-    (needsLeadingSpace ? " " : "") +
-    text +
-    (needsTrailingSpace ? " " : "");
-
-  input.value = before + inserted + after;
-  const caret = before.length + inserted.length;
-  input.focus();
-  input.setSelectionRange(caret, caret);
-  resizeInput();
-  input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 async function finishVoiceRecording() {
   if ((!state.recording && !mediaRecorder) || state.transcribing) return;
 
+  stopLiveTranscription();
   setVoiceUi(true, true);
   stopVoiceMeter();
+
+  const session = voiceSession;
 
   try {
     const blob = await stopRecorderToBlob();
@@ -357,28 +459,30 @@ async function finishVoiceRecording() {
 
     if (!blob.size) throw new Error("No audio was recorded.");
 
-    const extension = blob.type.includes("ogg") ? "ogg" : "webm";
-    const form = new FormData();
-    form.append("audio", blob, `recording.${extension}`);
+    const text = await transcribeVoiceBlob(blob, false, session);
+    const finalText = text || voiceLastPartial;
 
-    const response = await fetch("/api/transcribe", {
-      method: "POST",
-      body: form,
-    });
-    const result = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(result.error || "Voice transcription failed.");
+    if (finalText) {
+      const rendered = buildVoiceInsertedValue(finalText);
+      input.value = rendered.value;
+      resizeInput();
+      input.setSelectionRange(rendered.caret, rendered.caret);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    } else {
+      input.value = voiceOriginalValue;
+      resizeInput();
     }
 
-    insertTranscript((result.text || "").trim());
     voiceChunks = [];
     setVoiceUi(false, false);
   } catch (error) {
+    input.value = voiceOriginalValue;
+    resizeInput();
     setVoiceUi(false, false);
     alert(error?.message || "Voice transcription failed.");
   } finally {
     cleanupVoiceStream();
+    input.readOnly = false;
     input.focus();
   }
 }
