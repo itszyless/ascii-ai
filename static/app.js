@@ -27,6 +27,8 @@ const renameCancel = document.getElementById("renameCancel");
 const deleteModal = document.getElementById("deleteModal");
 const deleteConfirm = document.getElementById("deleteConfirm");
 const deleteCancel = document.getElementById("deleteCancel");
+const sidebarAccount = document.getElementById("sidebarAccount");
+const versionMenu = document.getElementById("versionMenu");
 const effortPicker = document.getElementById("effortPicker");
 const effortButton = document.getElementById("effortButton");
 const effortLabel = document.getElementById("effortLabel");
@@ -98,6 +100,7 @@ const tooltipLabels = new Map([
   ["effortButton", "Thinking effort"],
   ["micBtn", "Dictate"],
   ["newChat", "New chat"],
+  ["sidebarAccount", "OrcaAI"],
   ["sendBtn", "Send"],
   ["voiceCancel", "Cancel"],
   ["voiceStop", "Stop recording"],
@@ -326,12 +329,43 @@ document.addEventListener("click", event => {
   if (!effortPicker.contains(event.target)) setEffortOpen(false);
 });
 
+function setVersionMenuOpen(open) {
+  versionMenu.hidden = !open;
+  sidebarAccount.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+sidebarAccount.addEventListener("click", event => {
+  event.stopPropagation();
+  setVersionMenuOpen(versionMenu.hidden);
+});
+
+versionMenu.addEventListener("click", event => {
+  event.stopPropagation();
+});
+
+document.addEventListener("click", event => {
+  if (!versionMenu.hidden && !sidebarAccount.contains(event.target)) {
+    setVersionMenuOpen(false);
+  }
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !versionMenu.hidden) {
+    setVersionMenuOpen(false);
+    sidebarAccount.focus();
+  }
+});
+
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) setEffortOpen(false);
+  if (document.hidden) {
+    setEffortOpen(false);
+    setVersionMenuOpen(false);
+  }
 });
 
 window.addEventListener("blur", () => {
   setEffortOpen(false);
+  setVersionMenuOpen(false);
 });
 
 function setVoiceUi(active, processing = false) {
