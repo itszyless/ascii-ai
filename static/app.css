@@ -107,6 +107,9 @@ button { color: inherit; }
 .chat-open {
   flex: 1;
   min-width: 0;
+  display: block;
+  color: inherit;
+  text-decoration: none;
   border: 0;
   background: transparent;
   text-align: left;
