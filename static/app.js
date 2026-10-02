@@ -642,10 +642,26 @@ function renderSidebar() {
     const row = document.createElement("div");
     row.className = "chat-item" + (chat.id === state.activeChatId ? " active" : "");
 
-    const open = document.createElement("button");
+    const open = document.createElement("a");
     open.className = "chat-open";
+    open.href = `/c/${encodeURIComponent(chat.id)}`;
     open.textContent = chat.title;
-    open.onclick = () => openChat(chat.id);
+    open.addEventListener("click", event => {
+      // Keep normal browser link behavior for Ctrl/Cmd/Shift clicks and let
+      // middle-click/context-menu open the chat in a separate tab.
+      if (
+        event.button !== 0 ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      openChat(chat.id);
+    });
 
     const edit = document.createElement("button");
     edit.className = "chat-edit";
