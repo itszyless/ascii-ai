@@ -1202,9 +1202,23 @@ if (localStorage.getItem("orcaSidebarCollapsed") === "1") {
 }
 
 document.addEventListener("keydown", event => {
-  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "s") {
+  if (!event.ctrlKey || !event.shiftKey || event.repeat) return;
+
+  const key = event.key.toLowerCase();
+
+  if (key === "s") {
     event.preventDefault();
     setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+  } else if (key === "m") {
+    event.preventDefault();
+    setEffortOpen(effortPopover.hidden);
+  } else if (key === "d") {
+    event.preventDefault();
+    if (state.recording) finishVoiceRecording();
+    else if (!state.transcribing) startVoiceRecording();
+  } else if (key === "o") {
+    event.preventDefault();
+    showNewChat(true);
   }
 });
 
