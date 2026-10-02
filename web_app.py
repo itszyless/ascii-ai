@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import ast
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import threading
 import tempfile
@@ -318,9 +320,114 @@ def _decode_candidate(generated, prompt_length):
     return polish_reply(response)
 
 
+def _safe_eval_math(node):
+    if isinstance(node, ast.Expression):
+        return _safe_eval_math(node.body)
+
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)):
+            return node.value
+        raise ValueError("Unsupported value")
+
+    if isinstance(node, ast.UnaryOp):
+        value = _safe_eval_math(node.operand)
+        if isinstance(node.op, ast.UAdd):
+            return +value
+        if isinstance(node.op, ast.USub):
+            return -value
+        raise ValueError("Unsupported unary operator")
+
+    if isinstance(node, ast.BinOp):
+        left = _safe_eval_math(node.left)
+        right = _safe_eval_math(node.right)
+
+        if isinstance(node.op, ast.Add):
+            result = left + right
+        elif isinstance(node.op, ast.Sub):
+            result = left - right
+        elif isinstance(node.op, ast.Mult):
+            result = left * right
+        elif isinstance(node.op, ast.Div):
+            if right == 0:
+                raise ZeroDivisionError
+            result = left / right
+        elif isinstance(node.op, ast.FloorDiv):
+            if right == 0:
+                raise ZeroDivisionError
+            result = left // right
+        elif isinstance(node.op, ast.Mod):
+            if right == 0:
+                raise ZeroDivisionError
+            result = left % right
+        elif isinstance(node.op, ast.Pow):
+            if abs(right) > 10:
+                raise ValueError("Exponent is too large")
+            result = left ** right
+        else:
+            raise ValueError("Unsupported operator")
+
+        if abs(result) > 1e15:
+            raise ValueError("Result is too large")
+        return result
+
+    raise ValueError("Unsupported expression")
+
+
+def local_math_answer(prompt):
+    text = " ".join(str(prompt).strip().lower().split())
+    if not text:
+        return None
+
+    # Convert common natural-language arithmetic into a tiny safe expression.
+    replacements = (
+        (r"\bmultiplied by\b", "*"),
+        (r"\bdivided by\b", "/"),
+        (r"\btimes\b", "*"),
+        (r"\bmal\b", "*"),
+        (r"\bplus\b", "+"),
+        (r"\bminus\b", "-"),
+    )
+    expr = text
+    for pattern, replacement in replacements:
+        expr = re.sub(pattern, replacement, expr)
+
+    expr = re.sub(r"\bwhat(?:'s| is)\b", " ", expr)
+    expr = re.sub(r"\bcalculate\b", " ", expr)
+    expr = re.sub(r"\bcompute\b", " ", expr)
+    expr = re.sub(r"\bwie viel ist\b", " ", expr)
+    expr = re.sub(r"\bwas ist\b", " ", expr)
+    expr = re.sub(r"\bmultiply\s+(-?\d+(?:\.\d+)?)\s+by\s+(-?\d+(?:\.\d+)?)\b", r"\1 * \2", expr)
+
+    # Treat x or × between numbers as multiplication and ^ as exponentiation.
+    expr = re.sub(r"(?<=\d)\s*[x×]\s*(?=\d)", "*", expr)
+    expr = expr.replace("^", "**")
+    expr = expr.strip(" ?!.=")
+
+    if not expr or not re.fullmatch(r"[0-9eE.()+\-*/%\s]+", expr):
+        return None
+
+    try:
+        parsed = ast.parse(expr, mode="eval")
+        value = _safe_eval_math(parsed)
+    except (SyntaxError, ValueError, ZeroDivisionError, OverflowError):
+        return None
+
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    elif isinstance(value, float):
+        value = round(value, 10)
+
+    return str(value)
+
+
 def generate_reply(messages, effort="instant"):
-    load_model()
     user_prompt = messages[-1]["content"]
+
+    calculator_answer = local_math_answer(user_prompt)
+    if calculator_answer is not None:
+        return calculator_answer
+
+    load_model()
     _, _, _, chat_tuned = choose_model()
 
     # A raw pretrained checkpoint has never learned the User:/Assistant:
