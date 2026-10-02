@@ -1091,9 +1091,9 @@ body.sidebar-collapsed .sidebar-toggle:hover {
   pointer-events: none;
 }
 
-.effort-dot-0 { left: 5px; }
+.effort-dot-0 { left: 0; transform: translateX(-50%); }
 .effort-dot-1 { left: 50%; transform: translateX(-50%); }
-.effort-dot-2 { right: 5px; }
+.effort-dot-2 { right: 0; transform: translateX(50%); }
 
 .effort-picker[data-effort="instant"] .effort-track { --effort-position: 0%; }
 .effort-picker[data-effort="medium"] .effort-track { --effort-position: 50%; }
