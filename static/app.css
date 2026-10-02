@@ -1686,3 +1686,274 @@ body.sidebar-collapsed .new-chat-btn > span:last-child {
     flex-basis: 20px;
   }
 }
+
+
+/* Sidebar geometry v3: one icon column, fixed row heights, no vertical jump. */
+@media (min-width: 761px) {
+  .sidebar {
+    width: 280px !important;
+    flex: 0 0 280px !important;
+    padding: 8px !important;
+    overflow: hidden !important;
+    transform: none !important;
+    transition:
+      width .28s var(--ease),
+      flex-basis .28s var(--ease),
+      border-color .18s ease,
+      box-shadow .18s ease !important;
+  }
+
+  .sidebar-top {
+    width: 100%;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    flex: 0 0 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .brand {
+    height: 40px !important;
+    min-height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 0 10px !important;
+    margin: 0 !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 214px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    transition:
+      max-width .28s var(--ease),
+      opacity .13s ease,
+      transform .28s var(--ease) !important;
+  }
+
+  .brand-logo {
+    width: 20px !important;
+    height: 20px !important;
+    flex: 0 0 20px !important;
+    margin: 0 !important;
+  }
+
+  .brand > span {
+    display: block;
+    height: 20px;
+    line-height: 20px;
+  }
+
+  .sidebar-toggle {
+    position: relative !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    flex: 0 0 40px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    border-radius: 10px !important;
+    z-index: 4 !important;
+  }
+
+  .sidebar-toggle-logo,
+  .sidebar-toggle-icon {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    margin: 0 !important;
+    transform: translate(-50%, -50%) !important;
+    pointer-events: none !important;
+    transition:
+      opacity .13s ease,
+      transform .16s var(--ease) !important;
+  }
+
+  .sidebar-toggle-logo {
+    width: 20px !important;
+    height: 20px !important;
+    display: block !important;
+    opacity: 0 !important;
+  }
+
+  .sidebar-toggle-icon {
+    width: 18px !important;
+    height: 18px !important;
+    display: block !important;
+    opacity: 1 !important;
+  }
+
+  .new-chat-btn {
+    width: 100% !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    flex: 0 0 40px !important;
+    margin: 4px 0 0 !important;
+    padding: 0 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    line-height: 20px !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    border-radius: 10px !important;
+    transition:
+      width .28s var(--ease),
+      background .16s ease,
+      transform .16s var(--ease) !important;
+  }
+
+  .new-chat-btn .new-chat-icon {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    flex: 0 0 20px !important;
+    margin: 0 !important;
+  }
+
+  .new-chat-btn > span:last-child {
+    display: block !important;
+    height: 20px !important;
+    line-height: 20px !important;
+    max-width: 120px !important;
+    margin: 0 !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition:
+      max-width .24s var(--ease),
+      opacity .12s ease,
+      transform .24s var(--ease) !important;
+  }
+
+  .chat-section-label {
+    margin: 22px 10px 8px !important;
+  }
+
+  .sidebar-footer {
+    padding: 10px 10px 3px !important;
+  }
+
+  .product-footer {
+    min-height: 40px;
+    padding: 0 !important;
+  }
+
+  .footer-logo {
+    width: 20px !important;
+    height: 20px !important;
+    flex: 0 0 20px !important;
+    margin: 0 !important;
+  }
+
+  body.sidebar-collapsed .sidebar {
+    width: 56px !important;
+    flex: 0 0 56px !important;
+    padding: 8px !important;
+    border-right: 1px solid var(--border) !important;
+  }
+
+  body.sidebar-collapsed .main {
+    width: calc(100% - 56px) !important;
+  }
+
+  body.sidebar-collapsed .sidebar-top {
+    width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.sidebar-collapsed .brand {
+    display: flex !important;
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    gap: 0 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: translateX(-6px) !important;
+    pointer-events: none !important;
+    transition:
+      max-width .28s var(--ease),
+      width .28s var(--ease),
+      padding .28s var(--ease),
+      opacity .10s ease,
+      transform .28s var(--ease),
+      visibility 0s linear .28s !important;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px !important;
+    margin: 0 !important;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle-logo {
+    display: block !important;
+    opacity: 1 !important;
+    transform: translate(-50%, -50%) scale(1) !important;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle-icon {
+    display: block !important;
+    opacity: 0 !important;
+    transform: translate(-50%, -50%) scale(.92) !important;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle:hover .sidebar-toggle-logo,
+  body.sidebar-collapsed .sidebar-toggle:focus-visible .sidebar-toggle-logo {
+    opacity: 0 !important;
+    transform: translate(-50%, -50%) scale(.92) !important;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle:hover .sidebar-toggle-icon,
+  body.sidebar-collapsed .sidebar-toggle:focus-visible .sidebar-toggle-icon {
+    opacity: 1 !important;
+    transform: translate(-50%, -50%) scale(1) !important;
+  }
+
+  body.sidebar-collapsed .new-chat-btn {
+    width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    margin: 4px 0 0 !important;
+    padding: 0 10px !important;
+    gap: 0 !important;
+    justify-content: flex-start !important;
+  }
+
+  body.sidebar-collapsed .new-chat-btn > span:last-child {
+    display: block !important;
+    max-width: 0 !important;
+    opacity: 0 !important;
+    transform: translateX(-4px) !important;
+  }
+
+  body.sidebar-collapsed .chat-section-label,
+  body.sidebar-collapsed .chat-list,
+  body.sidebar-collapsed .sidebar-footer {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
