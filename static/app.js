@@ -2,7 +2,7 @@ const state = {
   chats: [],
   activeChatId: null,
   sending: false,
-  effort: localStorage.getItem("orcaThinkingEffort") || "instant",
+  effort: localStorage.getItem("orcaThinkingEffortV2") || "instant",
   recording: false,
   transcribing: false,
 };
@@ -89,7 +89,7 @@ let draggingEffort = false;
 function setEffort(level) {
   if (!effortCopy[level]) level = "instant";
   state.effort = level;
-  localStorage.setItem("orcaThinkingEffort", level);
+  localStorage.setItem("orcaThinkingEffortV2", level);
   effortPicker.dataset.effort = level;
   effortCurrent.textContent = effortCopy[level].label;
   effortTrack.setAttribute("aria-valuenow", String(effortCopy[level].value));
@@ -661,7 +661,8 @@ function setChatRoute(chat, replace = false) {
   const url = chat?.id ? `/c/${encodeURIComponent(chat.id)}` : "/";
   document.title = chat?.title || "OrcaAI";
 
-  const method = replace ? "replaceState" : "pushState";
+  const sameRoute = window.location.pathname === url;
+  const method = (replace || sameRoute) ? "replaceState" : "pushState";
   history[method]({ chatId: chat?.id || null }, "", url);
 }
 
