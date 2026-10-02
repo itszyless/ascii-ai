@@ -316,7 +316,7 @@ def _decode_candidate(generated, prompt_length):
     return polish_reply(response)
 
 
-def generate_reply(messages):
+def generate_reply(messages, effort="instant"):
     load_model()
     user_prompt = messages[-1]["content"]
     _, _, _, chat_tuned = choose_model()
@@ -333,28 +333,38 @@ def generate_reply(messages):
 
     tokens = torch.tensor([prompt_ids], dtype=torch.long, device=_device)
 
-    # Small models occasionally collapse into "...", one-word junk, or repeated
-    # phrases. Sample a couple of slightly different candidates and rank them.
-    settings = [(TEMPERATURE, TOP_K)]
+    effort = str(effort or "instant").lower()
+    effort_settings = {
+        "instant": [
+            (0.20, 1, 1.0, 100),
+        ],
+        "medium": [
+            (0.20, 1, 1.0, 110),
+            (0.32, 16, 0.90, 110),
+            (0.42, 24, 0.92, 110),
+        ],
+        "high": [
+            (0.20, 1, 1.0, 130),
+            (0.28, 12, 0.88, 130),
+            (0.36, 20, 0.90, 130),
+            (0.44, 28, 0.92, 130),
+            (0.52, 36, 0.94, 130),
+        ],
+    }
+    settings = effort_settings.get(effort, effort_settings["medium"])
 
+    # Medium and High spend more inference compute generating alternatives and
+    # keep the strongest candidate. This is local inference-time search.
     candidates = []
 
     with _generation_lock:
-        for index, (temperature, top_k) in enumerate(settings):
-            if index >= QUALITY_CANDIDATES and candidates:
-                best_so_far = max(
-                    response_quality(text, user_prompt)
-                    for text in candidates
-                )
-                if best_so_far >= 3.0:
-                    break
-
+        for temperature, top_k, top_p, max_new_tokens in settings:
             generated = _model.generate(
                 tokens,
-                max_new_tokens=MAX_NEW_TOKENS,
+                max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_k=top_k,
-                top_p=TOP_P,
+                top_p=top_p,
                 repetition_penalty=REPETITION_PENALTY,
                 stop_token_ids={_tokenizer.eos_id},
             )
