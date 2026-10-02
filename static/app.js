@@ -258,8 +258,13 @@ function setEffortOpen(open) {
 
 function effortFromClientX(clientX, commit = false) {
   const rect = effortTrack.getBoundingClientRect();
-  const position = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(rect.width, 1)));
-  effortTrack.style.setProperty("--effort-position", (position * 100) + "%");
+  const inset = 15;
+  const usable = Math.max(1, rect.width - inset * 2);
+  const x = Math.max(inset, Math.min(rect.width - inset, clientX - rect.left));
+  const position = (x - inset) / usable;
+  const visualPercent = (x / Math.max(rect.width, 1)) * 100;
+
+  effortTrack.style.setProperty("--effort-position", visualPercent + "%");
 
   const index = Math.max(0, Math.min(2, Math.round(position * 2)));
   const level = effortLevels[index];
