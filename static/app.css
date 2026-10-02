@@ -2156,3 +2156,30 @@ body.sidebar-collapsed .new-chat-btn > span:last-child {
     width: min(230px, calc(100vw - 36px));
   }
 }
+
+
+/* Let the collapsed account popover escape the 56px rail.
+   z-index alone cannot escape an overflow:hidden ancestor. */
+@media (min-width: 761px) {
+  .sidebar {
+    position: relative !important;
+    z-index: 40 !important;
+    overflow: visible !important;
+  }
+
+  body.sidebar-animating .sidebar {
+    overflow: hidden !important;
+  }
+
+  .sidebar-account-area {
+    z-index: 60;
+  }
+
+  .version-menu {
+    z-index: 1000;
+  }
+
+  .main {
+    z-index: 1;
+  }
+}
