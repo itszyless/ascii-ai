@@ -63,7 +63,55 @@
       <div class="composer-wrap">
         <form class="composer" id="composer">
           <textarea id="messageInput" rows="1" placeholder="Message OrcaAI" autocomplete="off"></textarea>
-          <button class="send-btn" id="sendBtn" type="submit" title="Send">↑</button>
+
+          <div class="composer-controls">
+            <div class="composer-left">
+              <div class="effort-picker" id="effortPicker" data-effort="medium">
+                <button class="effort-button" id="effortButton" type="button" aria-expanded="false">
+                  <span id="effortLabel">Medium</span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+                </button>
+
+                <div class="effort-popover" id="effortPopover" hidden>
+                  <div class="effort-title">Thinking effort</div>
+                  <div class="effort-options" role="radiogroup" aria-label="Thinking effort">
+                    <button type="button" data-effort-option="instant">Instant</button>
+                    <button type="button" data-effort-option="medium">Medium</button>
+                    <button type="button" data-effort-option="high">High</button>
+                  </div>
+                  <div class="effort-track" aria-hidden="true">
+                    <div class="effort-fill"></div>
+                    <div class="effort-thumb"></div>
+                    <span class="effort-dot effort-dot-0"></span>
+                    <span class="effort-dot effort-dot-1"></span>
+                    <span class="effort-dot effort-dot-2"></span>
+                  </div>
+                  <div class="effort-hint" id="effortHint">Balanced speed and quality</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="composer-right">
+              <button class="mic-btn" id="micBtn" type="button" title="Voice input" aria-label="Voice input">
+                <svg class="mic-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="3" width="6" height="12" rx="3"/>
+                  <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/>
+                </svg>
+              </button>
+              <button class="send-btn" id="sendBtn" type="submit" title="Send">↑</button>
+            </div>
+          </div>
+
+          <div class="voice-panel" id="voicePanel" hidden>
+            <button class="voice-cancel" id="voiceCancel" type="button" title="Cancel recording" aria-label="Cancel recording">×</button>
+            <div class="voice-wave" id="voiceWave" aria-label="Microphone level">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <button class="voice-stop" id="voiceStop" type="button" title="Stop and transcribe" aria-label="Stop and transcribe">
+              <span></span>
+            </button>
+            <button class="voice-save" id="voiceSave" type="button" title="Use voice input" aria-label="Use voice input">↑</button>
+          </div>
         </form>
         <div class="composer-meta">
           OrcaAI can make mistakes. Everything here stays on this machine.
