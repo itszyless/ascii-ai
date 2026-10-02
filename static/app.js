@@ -326,6 +326,14 @@ document.addEventListener("click", event => {
   if (!effortPicker.contains(event.target)) setEffortOpen(false);
 });
 
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) setEffortOpen(false);
+});
+
+window.addEventListener("blur", () => {
+  setEffortOpen(false);
+});
+
 function setVoiceUi(active, processing = false) {
   composer.classList.toggle("voice-active", active);
   composer.classList.toggle("voice-processing", processing);
