@@ -1520,3 +1520,169 @@ body.sidebar-collapsed .new-chat-btn > span:last-child {
     transform: none;
   }
 }
+
+
+/* Definitive desktop sidebar rail polish.
+   Keep the toggle/logo alive while the sidebar width animates and avoid the
+   brand occupying invisible space in the collapsed 52px rail. */
+@media (min-width: 761px) {
+  .sidebar-top {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    min-height: 42px;
+    flex: 0 0 42px;
+    padding: 4px 6px 4px;
+    overflow: visible;
+  }
+
+  .brand {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 190px;
+    white-space: nowrap;
+    overflow: hidden;
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+    transition:
+      max-width .28s var(--ease),
+      opacity .14s ease,
+      transform .28s var(--ease),
+      visibility 0s linear 0s;
+  }
+
+  .sidebar-toggle {
+    position: relative;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    overflow: visible;
+    z-index: 4;
+  }
+
+  .sidebar-toggle-logo,
+  .sidebar-toggle-icon {
+    display: block !important;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    transition:
+      opacity .14s ease,
+      transform .16s var(--ease);
+    pointer-events: none;
+  }
+
+  .sidebar-toggle-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    opacity: 0;
+  }
+
+  .sidebar-toggle-icon {
+    width: 18px !important;
+    height: 18px !important;
+    opacity: 1;
+  }
+
+  body.sidebar-collapsed .sidebar-top {
+    justify-content: center;
+    padding: 4px 3px;
+  }
+
+  body.sidebar-collapsed .brand {
+    display: flex;
+    flex: 0 1 0;
+    max-width: 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-8px);
+    pointer-events: none;
+    transition:
+      max-width .28s var(--ease),
+      opacity .12s ease,
+      transform .28s var(--ease),
+      visibility 0s linear .28s;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle {
+    display: grid;
+    margin: 0 auto;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle-logo {
+    display: block !important;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  body.sidebar-collapsed .sidebar-toggle-icon {
+    display: block !important;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.92);
+  }
+
+  body.sidebar-collapsed .sidebar-toggle:hover .sidebar-toggle-logo,
+  body.sidebar-collapsed .sidebar-toggle:focus-visible .sidebar-toggle-logo {
+    display: block !important;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.92);
+  }
+
+  body.sidebar-collapsed .sidebar-toggle:hover .sidebar-toggle-icon,
+  body.sidebar-collapsed .sidebar-toggle:focus-visible .sidebar-toggle-icon {
+    display: block !important;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .new-chat-btn {
+    flex: 0 0 40px;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    line-height: 20px;
+    align-items: center;
+  }
+
+  .new-chat-btn .new-chat-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+  }
+
+  .new-chat-btn > span:last-child {
+    line-height: 20px;
+    height: 20px;
+  }
+
+  body.sidebar-collapsed .new-chat-btn {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    padding: 0 10px;
+    margin: 8px auto 0;
+    justify-content: flex-start;
+  }
+
+  body.sidebar-collapsed .new-chat-btn .new-chat-icon {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+}
