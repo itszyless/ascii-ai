@@ -1957,3 +1957,202 @@ body.sidebar-collapsed .new-chat-btn > span:last-child {
     pointer-events: none !important;
   }
 }
+
+
+/* Bottom OrcaAI account/version control */
+.sidebar-account-area {
+  position: relative;
+  flex: 0 0 48px;
+  height: 48px;
+  min-height: 48px;
+  margin-top: auto;
+  padding: 4px 0;
+  overflow: visible;
+}
+
+.sidebar-account-btn {
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 10px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  transition:
+    width .28s var(--ease),
+    background .16s ease,
+    transform .16s var(--ease);
+}
+
+.sidebar-account-btn:hover,
+.sidebar-account-btn[aria-expanded="true"] {
+  background: var(--sidebar-hover);
+}
+
+.sidebar-account-btn:active {
+  transform: scale(.985);
+}
+
+.sidebar-account-logo {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  flex: 0 0 20px;
+  display: block;
+  object-fit: contain;
+}
+
+.sidebar-account-copy {
+  min-width: 0;
+  max-width: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    max-width .24s var(--ease),
+    opacity .12s ease,
+    transform .24s var(--ease);
+}
+
+.sidebar-account-name {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.sidebar-account-sub {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.version-menu {
+  position: absolute;
+  left: 0;
+  bottom: 52px;
+  width: 230px;
+  z-index: 80;
+  padding: 8px;
+  border: 1px solid #dedede;
+  border-radius: 16px;
+  background: rgba(255,255,255,.985);
+  box-shadow: 0 12px 34px rgba(0,0,0,.14);
+  transform-origin: bottom left;
+  animation: versionMenuIn .16s var(--ease) both;
+}
+
+.version-menu[hidden] {
+  display: none;
+}
+
+.version-menu-head {
+  min-height: 50px;
+  padding: 5px 7px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.version-menu-head img {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+}
+
+.version-menu-name {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 16px;
+}
+
+.version-menu-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.version-menu-divider {
+  height: 1px;
+  margin: 3px 3px 5px;
+  background: #e7e7e7;
+}
+
+.version-menu-row {
+  height: 40px;
+  padding: 0 9px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.version-menu-value {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+@keyframes versionMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (min-width: 761px) {
+  body.sidebar-collapsed .sidebar-account-area {
+    width: 40px;
+    flex: 0 0 48px;
+    margin-top: auto;
+  }
+
+  body.sidebar-collapsed .sidebar-account-btn {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 10px;
+    gap: 0;
+  }
+
+  body.sidebar-collapsed .sidebar-account-copy {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-4px);
+    pointer-events: none;
+  }
+
+  body.sidebar-collapsed .version-menu {
+    left: 44px;
+    bottom: 0;
+    transform-origin: bottom left;
+  }
+}
+
+@media (max-width: 760px) {
+  .sidebar-account-area {
+    flex: 0 0 48px;
+  }
+
+  .version-menu {
+    width: min(230px, calc(100vw - 36px));
+  }
+}
