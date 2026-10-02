@@ -53,10 +53,7 @@ let voiceAnimationFrame = null;
 let voiceInsertStart = 0;
 let voiceInsertEnd = 0;
 let voiceOriginalValue = "";
-let voiceLiveTimer = null;
-let voicePartialBusy = false;
 let voiceSession = 0;
-let voiceLastPartial = "";
 
 const icons = {
   copy: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>',
@@ -446,14 +443,6 @@ function cleanupVoiceStream() {
   mediaRecorder = null;
 }
 
-function stopLiveTranscription() {
-  if (voiceLiveTimer) {
-    clearInterval(voiceLiveTimer);
-    voiceLiveTimer = null;
-  }
-  voicePartialBusy = false;
-}
-
 function buildVoiceInsertedValue(text) {
   const value = voiceOriginalValue;
   const start = Math.min(voiceInsertStart, value.length);
@@ -464,10 +453,7 @@ function buildVoiceInsertedValue(text) {
   const clean = String(text || "").trim();
 
   if (!clean) {
-    return {
-      value,
-      caret: start,
-    };
+    return { value, caret: start };
   }
 
   const needsLeadingSpace =
@@ -490,24 +476,12 @@ function buildVoiceInsertedValue(text) {
   };
 }
 
-function renderVoiceTranscript(text) {
-  const clean = String(text || "").trim();
-  if (!clean) return;
-
-  voiceLastPartial = clean;
-  const rendered = buildVoiceInsertedValue(clean);
-  input.value = rendered.value;
-  resizeInput();
-  input.setSelectionRange(rendered.caret, rendered.caret);
-}
-
-async function transcribeVoiceBlob(blob, partial, session) {
+async function transcribeVoiceBlob(blob, session) {
   if (!blob?.size) return null;
 
   const extension = blob.type.includes("ogg") ? "ogg" : "webm";
   const form = new FormData();
   form.append("audio", blob, `recording.${extension}`);
-  if (partial) form.append("partial", "1");
 
   const response = await fetch("/api/transcribe", {
     method: "POST",
@@ -523,33 +497,6 @@ async function transcribeVoiceBlob(blob, partial, session) {
   return (result.text || "").trim();
 }
 
-async function updateLiveTranscript(session) {
-  if (
-    session !== voiceSession ||
-    !state.recording ||
-    voicePartialBusy ||
-    voiceChunks.length < 2
-  ) {
-    return;
-  }
-
-  voicePartialBusy = true;
-  try {
-    const type = mediaRecorder?.mimeType || voiceChunks[0]?.type || "audio/webm";
-    const blob = new Blob([...voiceChunks], { type });
-    const text = await transcribeVoiceBlob(blob, true, session);
-
-    if (text && session === voiceSession && state.recording) {
-      renderVoiceTranscript(text);
-    }
-  } catch {
-    // Partial transcription is best-effort. Final transcription still runs
-    // when the user stops recording.
-  } finally {
-    voicePartialBusy = false;
-  }
-}
-
 async function startVoiceRecording() {
   if (state.recording || state.transcribing) return;
 
@@ -561,7 +508,6 @@ async function startVoiceRecording() {
   voiceInsertStart = input.selectionStart ?? input.value.length;
   voiceInsertEnd = input.selectionEnd ?? voiceInsertStart;
   voiceOriginalValue = input.value;
-  voiceLastPartial = "";
   voiceChunks = [];
   voiceSession += 1;
   const session = voiceSession;
@@ -586,12 +532,7 @@ async function startVoiceRecording() {
     input.readOnly = true;
     setVoiceUi(true, false);
     startVoiceMeter(voiceStream);
-
-    voiceLiveTimer = window.setInterval(() => {
-      updateLiveTranscript(session);
-    }, 1600);
   } catch (error) {
-    stopLiveTranscription();
     cleanupVoiceStream();
     input.readOnly = false;
     setVoiceUi(false, false);
@@ -601,7 +542,6 @@ async function startVoiceRecording() {
 
 function discardVoiceRecording() {
   voiceSession += 1;
-  stopLiveTranscription();
 
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop();
@@ -639,7 +579,6 @@ function stopRecorderToBlob() {
 async function finishVoiceRecording() {
   if ((!state.recording && !mediaRecorder) || state.transcribing) return;
 
-  stopLiveTranscription();
   setVoiceUi(true, true);
   stopVoiceMeter();
 
@@ -651,11 +590,10 @@ async function finishVoiceRecording() {
 
     if (!blob.size) throw new Error("No audio was recorded.");
 
-    const text = await transcribeVoiceBlob(blob, false, session);
-    const finalText = text || voiceLastPartial;
+    const text = await transcribeVoiceBlob(blob, session);
 
-    if (finalText) {
-      const rendered = buildVoiceInsertedValue(finalText);
+    if (text) {
+      const rendered = buildVoiceInsertedValue(text);
       input.value = rendered.value;
       resizeInput();
       input.setSelectionRange(rendered.caret, rendered.caret);
