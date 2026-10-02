@@ -9,3 +9,4 @@ flask
 
 # Local CPU speech-to-text for the web microphone.
 faster-whisper
+av>=11,<19
