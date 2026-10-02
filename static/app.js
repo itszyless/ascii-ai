@@ -771,10 +771,13 @@ async function saveRename() {
   const title = renameInput.value.trim();
   if (!renameChatId || !title) return;
 
-  await api(`/api/chats/${renameChatId}`, {
+  const renamed = await api(`/api/chats/${renameChatId}`, {
     method: "PATCH",
     body: JSON.stringify({ title }),
   });
+  if (state.activeChatId === renameChatId) {
+    document.title = renamed.title;
+  }
   closeRenameModal();
   await refreshChats();
 }
@@ -862,6 +865,16 @@ async function sendMessage(text) {
     await removeThinkingSmooth();
     await revealAssistantMessage(result.message);
     await refreshChats();
+
+    const active = state.chats.find(chat => chat.id === state.activeChatId);
+    if (active) {
+      document.title = active.title;
+      history.replaceState(
+        { chatId: active.id },
+        "",
+        `/c/${encodeURIComponent(active.id)}`
+      );
+    }
 
     // Keep the sidebar footer as stable product branding.
   } catch (error) {
