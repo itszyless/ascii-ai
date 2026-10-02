@@ -1,4 +1,11 @@
-const state = { chats: [], activeChatId: null, sending: false };
+const state = {
+  chats: [],
+  activeChatId: null,
+  sending: false,
+  effort: localStorage.getItem("orcaThinkingEffort") || "medium",
+  recording: false,
+  transcribing: false,
+};
 
 const chatList = document.getElementById("chatList");
 const messages = document.getElementById("messages");
@@ -20,8 +27,28 @@ const renameCancel = document.getElementById("renameCancel");
 const deleteModal = document.getElementById("deleteModal");
 const deleteConfirm = document.getElementById("deleteConfirm");
 const deleteCancel = document.getElementById("deleteCancel");
+const effortPicker = document.getElementById("effortPicker");
+const effortButton = document.getElementById("effortButton");
+const effortLabel = document.getElementById("effortLabel");
+const effortPopover = document.getElementById("effortPopover");
+const effortHint = document.getElementById("effortHint");
+const micBtn = document.getElementById("micBtn");
+const voicePanel = document.getElementById("voicePanel");
+const voiceWave = document.getElementById("voiceWave");
+const voiceCancel = document.getElementById("voiceCancel");
+const voiceStop = document.getElementById("voiceStop");
+const voiceSave = document.getElementById("voiceSave");
 let renameChatId = null;
 let deleteChatId = null;
+
+let voiceStream = null;
+let mediaRecorder = null;
+let voiceChunks = [];
+let voiceAudioContext = null;
+let voiceAnalyser = null;
+let voiceAnimationFrame = null;
+let voiceInsertStart = 0;
+let voiceInsertEnd = 0;
 
 const icons = {
   copy: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>',
@@ -47,6 +74,270 @@ async function api(url, options = {}) {
 function escapeHtml(value) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
+
+
+const effortCopy = {
+  instant: { label: "Instant", hint: "Fastest response" },
+  medium: { label: "Medium", hint: "Balanced speed and quality" },
+  high: { label: "High", hint: "More local inference for the best candidate" },
+};
+
+function setEffort(level) {
+  if (!effortCopy[level]) level = "medium";
+  state.effort = level;
+  localStorage.setItem("orcaThinkingEffort", level);
+  effortPicker.dataset.effort = level;
+  effortLabel.textContent = effortCopy[level].label;
+  effortHint.textContent = effortCopy[level].hint;
+
+  for (const option of effortPopover.querySelectorAll("[data-effort-option]")) {
+    const selected = option.dataset.effortOption === level;
+    option.classList.toggle("selected", selected);
+    option.setAttribute("aria-checked", selected ? "true" : "false");
+  }
+}
+
+function setEffortOpen(open) {
+  effortPopover.hidden = !open;
+  effortButton.setAttribute("aria-expanded", open ? "true" : "false");
+  effortPicker.classList.toggle("open", open);
+}
+
+effortButton.addEventListener("click", event => {
+  event.stopPropagation();
+  setEffortOpen(effortPopover.hidden);
+});
+
+for (const option of effortPopover.querySelectorAll("[data-effort-option]")) {
+  option.addEventListener("click", () => {
+    setEffort(option.dataset.effortOption);
+    window.setTimeout(() => setEffortOpen(false), 120);
+  });
+}
+
+document.addEventListener("click", event => {
+  if (!effortPicker.contains(event.target)) setEffortOpen(false);
+});
+
+function setVoiceUi(active, processing = false) {
+  composer.classList.toggle("voice-active", active);
+  composer.classList.toggle("voice-processing", processing);
+  voicePanel.hidden = !active;
+  state.recording = active && !processing;
+  state.transcribing = processing;
+
+  micBtn.classList.toggle("recording", active);
+  micBtn.innerHTML = active
+    ? '<span class="mic-stop-square" aria-hidden="true"></span>'
+    : '<svg class="mic-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg>';
+
+  voiceCancel.disabled = processing;
+  voiceStop.disabled = processing;
+  voiceSave.disabled = processing;
+  voiceSave.classList.toggle("loading", processing);
+}
+
+function stopVoiceMeter() {
+  if (voiceAnimationFrame) cancelAnimationFrame(voiceAnimationFrame);
+  voiceAnimationFrame = null;
+
+  if (voiceAudioContext) {
+    voiceAudioContext.close().catch(() => {});
+    voiceAudioContext = null;
+  }
+  voiceAnalyser = null;
+
+  for (const bar of voiceWave.children) {
+    bar.style.transform = "scaleY(.18)";
+  }
+}
+
+function startVoiceMeter(stream) {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+
+  voiceAudioContext = new AudioCtx();
+  voiceAnalyser = voiceAudioContext.createAnalyser();
+  voiceAnalyser.fftSize = 256;
+  voiceAnalyser.smoothingTimeConstant = 0.74;
+
+  const source = voiceAudioContext.createMediaStreamSource(stream);
+  source.connect(voiceAnalyser);
+
+  const data = new Uint8Array(voiceAnalyser.frequencyBinCount);
+  const bars = [...voiceWave.children];
+
+  function draw() {
+    if (!voiceAnalyser || !state.recording) return;
+    voiceAnalyser.getByteFrequencyData(data);
+
+    const bucket = Math.max(1, Math.floor(data.length / bars.length));
+    bars.forEach((bar, index) => {
+      let total = 0;
+      const start = index * bucket;
+      const end = Math.min(data.length, start + bucket);
+      for (let i = start; i < end; i += 1) total += data[i];
+      const average = total / Math.max(1, end - start);
+      const level = Math.max(.18, Math.min(1, average / 110));
+      bar.style.transform = `scaleY(${level})`;
+    });
+
+    voiceAnimationFrame = requestAnimationFrame(draw);
+  }
+
+  draw();
+}
+
+function cleanupVoiceStream() {
+  stopVoiceMeter();
+  if (voiceStream) {
+    for (const track of voiceStream.getTracks()) track.stop();
+    voiceStream = null;
+  }
+  mediaRecorder = null;
+}
+
+async function startVoiceRecording() {
+  if (state.recording || state.transcribing) return;
+
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    alert("Voice recording is not supported by this browser.");
+    return;
+  }
+
+  voiceInsertStart = input.selectionStart ?? input.value.length;
+  voiceInsertEnd = input.selectionEnd ?? voiceInsertStart;
+  voiceChunks = [];
+
+  try {
+    voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const preferred = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+    ].find(type => MediaRecorder.isTypeSupported(type));
+
+    mediaRecorder = preferred
+      ? new MediaRecorder(voiceStream, { mimeType: preferred })
+      : new MediaRecorder(voiceStream);
+
+    mediaRecorder.addEventListener("dataavailable", event => {
+      if (event.data?.size) voiceChunks.push(event.data);
+    });
+
+    mediaRecorder.start(120);
+    setVoiceUi(true, false);
+    startVoiceMeter(voiceStream);
+  } catch (error) {
+    cleanupVoiceStream();
+    setVoiceUi(false, false);
+    alert(error?.message || "Microphone access failed.");
+  }
+}
+
+function discardVoiceRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.ondataavailable = null;
+    mediaRecorder.stop();
+  }
+  voiceChunks = [];
+  cleanupVoiceStream();
+  setVoiceUi(false, false);
+  input.focus();
+  input.setSelectionRange(voiceInsertStart, voiceInsertEnd);
+}
+
+function stopRecorderToBlob() {
+  return new Promise(resolve => {
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      const type = voiceChunks[0]?.type || "audio/webm";
+      resolve(new Blob(voiceChunks, { type }));
+      return;
+    }
+
+    mediaRecorder.addEventListener("stop", () => {
+      const type = mediaRecorder?.mimeType || voiceChunks[0]?.type || "audio/webm";
+      resolve(new Blob(voiceChunks, { type }));
+    }, { once: true });
+
+    mediaRecorder.stop();
+  });
+}
+
+function insertTranscript(text) {
+  if (!text) return;
+  const value = input.value;
+  const start = Math.min(voiceInsertStart, value.length);
+  const end = Math.min(Math.max(voiceInsertEnd, start), value.length);
+
+  const before = value.slice(0, start);
+  const after = value.slice(end);
+  const needsLeadingSpace = before && !/\s$/.test(before) && !/^[,.;!?]/.test(text);
+  const needsTrailingSpace = after && !/^\s/.test(after) && !/[\s([{]$/.test(text);
+
+  const inserted =
+    (needsLeadingSpace ? " " : "") +
+    text +
+    (needsTrailingSpace ? " " : "");
+
+  input.value = before + inserted + after;
+  const caret = before.length + inserted.length;
+  input.focus();
+  input.setSelectionRange(caret, caret);
+  resizeInput();
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function finishVoiceRecording() {
+  if ((!state.recording && !mediaRecorder) || state.transcribing) return;
+
+  setVoiceUi(true, true);
+  stopVoiceMeter();
+
+  try {
+    const blob = await stopRecorderToBlob();
+    cleanupVoiceStream();
+
+    if (!blob.size) throw new Error("No audio was recorded.");
+
+    const extension = blob.type.includes("ogg") ? "ogg" : "webm";
+    const form = new FormData();
+    form.append("audio", blob, `recording.${extension}`);
+
+    const response = await fetch("/api/transcribe", {
+      method: "POST",
+      body: form,
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result.error || "Voice transcription failed.");
+    }
+
+    insertTranscript((result.text || "").trim());
+    voiceChunks = [];
+    setVoiceUi(false, false);
+  } catch (error) {
+    setVoiceUi(false, false);
+    alert(error?.message || "Voice transcription failed.");
+  } finally {
+    cleanupVoiceStream();
+    input.focus();
+  }
+}
+
+micBtn.addEventListener("click", () => {
+  if (state.recording) {
+    finishVoiceRecording();
+  } else if (!state.transcribing) {
+    startVoiceRecording();
+  }
+});
+voiceCancel.addEventListener("click", discardVoiceRecording);
+voiceStop.addEventListener("click", finishVoiceRecording);
+voiceSave.addEventListener("click", finishVoiceRecording);
+
+setEffort(state.effort);
 
 function renderSidebar() {
   chatList.innerHTML = "";
@@ -457,7 +748,10 @@ async function regenerateResponse(messageId, oldRow) {
     const minimumWait = wait(randomThinkingDelay());
     const requestPromise = api(`/api/chats/${state.activeChatId}/regenerate`, {
       method: "POST",
-      body: JSON.stringify({ message_id: messageId }),
+      body: JSON.stringify({
+        message_id: messageId,
+        effort: state.effort,
+      }),
     });
 
     const [result] = await Promise.all([requestPromise, minimumWait]);
@@ -488,7 +782,10 @@ async function sendMessage(text) {
       `/api/chats/${state.activeChatId}/messages`,
       {
         method: "POST",
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message: text,
+          effort: state.effort,
+        }),
       }
     );
 
