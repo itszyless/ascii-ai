@@ -624,7 +624,7 @@ def get_whisper_model():
                     "Run: py -3.12 -m pip install faster-whisper"
                 ) from exc
 
-            model_name = os.getenv("ORCA_WHISPER_MODEL", "small.en")
+            model_name = os.getenv("ORCA_WHISPER_MODEL", "small")
             _whisper_model = WhisperModel(
                 model_name,
                 device="cpu",
@@ -661,7 +661,6 @@ def transcribe_audio():
                 str(temp_path),
                 beam_size=5,
                 vad_filter=True,
-                language="en",
                 condition_on_previous_text=False,
             )
             text = " ".join(
@@ -672,7 +671,7 @@ def transcribe_audio():
 
         return jsonify({
             "text": text,
-            "language": getattr(info, "language", "en"),
+            "language": getattr(info, "language", None),
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
