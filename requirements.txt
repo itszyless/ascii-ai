@@ -6,3 +6,6 @@ numpy
 tokenizers
 datasets
 flask
+
+# Local CPU speech-to-text for the web microphone.
+faster-whisper
