@@ -73,20 +73,15 @@
                 </button>
 
                 <div class="effort-popover" id="effortPopover" hidden>
-                  <div class="effort-title">Thinking effort</div>
-                  <div class="effort-options" role="radiogroup" aria-label="Thinking effort">
-                    <button type="button" data-effort-option="instant">Instant</button>
-                    <button type="button" data-effort-option="medium">Medium</button>
-                    <button type="button" data-effort-option="high">High</button>
-                  </div>
-                  <div class="effort-track" aria-hidden="true">
+                  <div class="effort-current" id="effortCurrent">Instant</div>
+                  <div class="effort-track" id="effortTrack" role="slider" tabindex="0"
+                       aria-label="Thinking effort" aria-valuemin="0" aria-valuemax="2" aria-valuenow="0">
                     <div class="effort-fill"></div>
                     <div class="effort-thumb"></div>
                     <span class="effort-dot effort-dot-0"></span>
                     <span class="effort-dot effort-dot-1"></span>
                     <span class="effort-dot effort-dot-2"></span>
                   </div>
-                  <div class="effort-hint" id="effortHint">Balanced speed and quality</div>
                 </div>
               </div>
             </div>
