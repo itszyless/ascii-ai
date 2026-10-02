@@ -918,7 +918,7 @@ input.addEventListener("keydown", event => {
   }
 });
 
-newChatBtn.onclick = createChat;
+newChatBtn.onclick = () => showNewChat(true);
 document.getElementById("openSidebar").onclick = () => sidebar.classList.add("open");
 document.getElementById("closeSidebar").onclick = () => sidebar.classList.remove("open");
 
@@ -954,13 +954,44 @@ function closeSidebarOnMobile() {
   if (window.innerWidth <= 760) sidebar.classList.remove("open");
 }
 
+window.addEventListener("popstate", async () => {
+  const chatId = chatIdFromPath();
+
+  if (!chatId) {
+    showNewChat(false);
+    return;
+  }
+
+  try {
+    await openChat(chatId, { replace: true });
+  } catch {
+    state.activeChatId = null;
+    messages.innerHTML = "";
+    welcome.style.display = "grid";
+    renderSidebar();
+    setChatRoute(null, true);
+  }
+});
+
 (async function boot() {
   await checkStatus();
   await refreshChats();
 
-  if (state.chats.length) {
-    await openChat(state.chats[0].id);
-  } else {
-    input.focus();
+  const chatId = chatIdFromPath();
+  if (chatId) {
+    try {
+      await openChat(chatId, { replace: true });
+      return;
+    } catch {
+      setChatRoute(null, true);
+    }
   }
+
+  state.activeChatId = null;
+  messages.innerHTML = "";
+  welcome.style.display = "grid";
+  document.title = "OrcaAI";
+  history.replaceState({ chatId: null }, "", "/");
+  renderSidebar();
+  input.focus();
 })();
