@@ -50,6 +50,11 @@ let voiceAnalyser = null;
 let voiceAnimationFrame = null;
 let voiceInsertStart = 0;
 let voiceInsertEnd = 0;
+let voiceOriginalValue = "";
+let voiceLiveTimer = null;
+let voicePartialBusy = false;
+let voiceSession = 0;
+let voiceLastPartial = "";
 
 const icons = {
   copy: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>',
@@ -124,24 +129,29 @@ effortButton.addEventListener("click", event => {
 });
 
 effortTrack.addEventListener("pointerdown", event => {
+  event.preventDefault();
   draggingEffort = true;
-  if (effortTrack.setPointerCapture) effortTrack.setPointerCapture(event.pointerId);
+  effortTrack.classList.add("dragging");
   effortFromClientX(event.clientX, false);
 });
 
-effortTrack.addEventListener("pointermove", event => {
+window.addEventListener("pointermove", event => {
   if (!draggingEffort) return;
+  event.preventDefault();
   effortFromClientX(event.clientX, false);
-});
+}, { passive: false });
 
-effortTrack.addEventListener("pointerup", event => {
+window.addEventListener("pointerup", event => {
   if (!draggingEffort) return;
   draggingEffort = false;
+  effortTrack.classList.remove("dragging");
   effortFromClientX(event.clientX, true);
 });
 
-effortTrack.addEventListener("pointercancel", () => {
+window.addEventListener("pointercancel", () => {
+  if (!draggingEffort) return;
   draggingEffort = false;
+  effortTrack.classList.remove("dragging");
   setEffort(state.effort);
 });
 
