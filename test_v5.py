@@ -9,16 +9,25 @@ from tokenizer import LocalTokenizer
 
 
 CHECKPOINT_DIR = Path("checkpoints")
+BOOST_BEST_PATH = CHECKPOINT_DIR / "model_v5_boost_best.pt"
+BOOST_PATH = CHECKPOINT_DIR / "model_v5_boost.pt"
 BEST_MODEL_PATH = CHECKPOINT_DIR / "model_v5_best.pt"
 FALLBACK_MODEL_PATH = CHECKPOINT_DIR / "model_v5.pt"
 TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v5.json"
 
 
 def main():
-    model_path = (
-        BEST_MODEL_PATH
-        if BEST_MODEL_PATH.exists()
-        else FALLBACK_MODEL_PATH
+    model_path = next(
+        (
+            path for path in (
+                BOOST_BEST_PATH,
+                BOOST_PATH,
+                BEST_MODEL_PATH,
+                FALLBACK_MODEL_PATH,
+            )
+            if path.exists()
+        ),
+        FALLBACK_MODEL_PATH,
     )
 
     if not model_path.exists():
@@ -60,6 +69,9 @@ def main():
     print("  The CPU executes")
     print("  Paris is the capital of")
     print("  Water freezes at")
+    print("  Die Hauptstadt von Österreich ist")
+    print("  12 mal 9 ist")
+    print("  7 × 8 =")
     print("Type /quit to leave.")
     print()
 
