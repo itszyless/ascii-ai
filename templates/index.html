@@ -33,14 +33,30 @@
       <div class="chat-section-label">Chats</div>
       <div class="chat-list" id="chatList"></div>
 
-      <div class="sidebar-footer">
-        <div class="product-footer">
-          <img class="footer-logo" src="/static/favicon.svg?v=orca2" alt="">
-          <div>
-            <div class="status-title">Orca AI</div>
-            <div class="status-sub">Beta v0.1</div>
+      <div class="sidebar-account-area">
+        <div class="version-menu" id="versionMenu" hidden>
+          <div class="version-menu-head">
+            <img src="/static/favicon.svg?v=orca2" alt="">
+            <div>
+              <div class="version-menu-name">OrcaAI</div>
+              <div class="version-menu-sub">Local AI</div>
+            </div>
+          </div>
+          <div class="version-menu-divider"></div>
+          <div class="version-menu-row">
+            <span>Version</span>
+            <span class="version-menu-value">Beta v0.1</span>
           </div>
         </div>
+
+        <button class="sidebar-account-btn" id="sidebarAccount" type="button"
+                aria-label="OrcaAI version" aria-expanded="false">
+          <img class="sidebar-account-logo" src="/static/favicon.svg?v=orca2" alt="">
+          <span class="sidebar-account-copy">
+            <span class="sidebar-account-name">OrcaAI</span>
+            <span class="sidebar-account-sub">Beta v0.1</span>
+          </span>
+        </button>
       </div>
     </aside>
 
