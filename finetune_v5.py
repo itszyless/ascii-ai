@@ -578,7 +578,7 @@ def main():
                 if source is not None:
                     base_x, base_y = get_base_batch(
                         source,
-                        context_length,
+                        min(context_length, REPLAY_CONTEXT_LENGTH),
                         device,
                     )
                     _, replay_loss = model(
