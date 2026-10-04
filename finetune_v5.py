@@ -22,6 +22,8 @@ CURATED_CHAT_PATH = Path("data/chat_v5.jsonl")
 FINEWEB_PATH = Path("data/fineweb_v5.bin")
 WIKI_PATH = Path("data/wikipedia_v5.bin")
 MULTILINGUAL_PATH = Path("data/multilingual_v5_boost.bin")
+V5_1_BEST_MODEL_PATH = Path("checkpoints/model_v5_1_best.pt")
+V5_1_MODEL_PATH = Path("checkpoints/model_v5_1.pt")
 BOOST_BEST_MODEL_PATH = Path("checkpoints/model_v5_boost_best.pt")
 BOOST_MODEL_PATH = Path("checkpoints/model_v5_boost.pt")
 MODEL_PATH = Path("checkpoints/model_v5_best.pt")
@@ -420,7 +422,11 @@ def main():
         )
 
     model_path = (
-        MODEL_PATH
+        V5_1_BEST_MODEL_PATH
+        if V5_1_BEST_MODEL_PATH.exists()
+        else V5_1_MODEL_PATH
+        if V5_1_MODEL_PATH.exists()
+        else MODEL_PATH
         if MODEL_PATH.exists()
         else FALLBACK_MODEL_PATH
         if FALLBACK_MODEL_PATH.exists()
