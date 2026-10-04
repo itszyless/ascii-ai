@@ -52,7 +52,7 @@ def normalize(text):
 
 
 
-def load_curated_examples(path, split=None):
+def load_curated_examples(path, split=None, core_repeat=1):
     if not path.exists():
         return []
 
@@ -76,13 +76,23 @@ def load_curated_examples(path, split=None):
                 if user and assistant:
                     conversation.append((user, assistant))
             if conversation:
-                rows.append(conversation)
+                repeats = (
+                    core_repeat
+                    if str(item.get("source") or "").startswith("core_")
+                    else 1
+                )
+                rows.extend([conversation] * repeats)
             continue
 
         user = str(item.get("user", "")).strip()
         assistant = str(item.get("assistant", "")).strip()
         if user and assistant:
-            rows.append([(user, assistant)])
+            repeats = (
+                core_repeat
+                if str(item.get("source") or "").startswith("core_")
+                else 1
+            )
+            rows.extend([[(user, assistant)]] * repeats)
     return rows
 
 
@@ -437,10 +447,12 @@ def main():
     curated_train = load_curated_examples(
         CURATED_CHAT_PATH,
         "train",
+        core_repeat=CORE_TRAIN_REPEAT,
     )
     curated_val = load_curated_examples(
         CURATED_CHAT_PATH,
         "val",
+        core_repeat=1,
     )
 
     if curated_train and curated_val:
