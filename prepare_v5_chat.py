@@ -606,11 +606,12 @@ def main():
     }
     expanded = []
     for row in rows:
-        repeats = (
-            source_repeat.get(row["source"], 1)
-            if row["split"] == "train"
-            else 1
-        )
+        if row["split"] == "train":
+            repeats = source_repeat.get(row["source"], 1)
+        elif row["source"].startswith("core_"):
+            repeats = max(1, source_repeat.get(row["source"], 1) // 10)
+        else:
+            repeats = 1
         expanded.extend([row] * repeats)
     rows = expanded
 
