@@ -18,6 +18,7 @@ import torch
 
 from model import LocalAI
 from model_v4 import OrcaAIv4
+from model_v5 import OrcaAIv5
 from tokenizer import LocalTokenizer
 from lab_api import register_lab
 from quality_layer import retrieve_context, response_quality
@@ -27,6 +28,9 @@ ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 CHAT_STORE = DATA_DIR / "web_chats.json"
 CHECKPOINT_DIR = ROOT / "checkpoints"
+V5_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v5.pt"
+V5_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v5.json"
+
 V4_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v4.pt"
 V4_GROUNDED_MODEL_PATH = CHECKPOINT_DIR / "model_v4_grounded.pt"
 V4_BASE_MODEL_PATH = CHECKPOINT_DIR / "model_v4_best.pt"
@@ -106,6 +110,9 @@ def checkpoint_signature(path):
 
 
 def choose_model():
+    if V5_CHAT_MODEL_PATH.exists() and V5_TOKENIZER_PATH.exists():
+        return V5_CHAT_MODEL_PATH, V5_TOKENIZER_PATH, "v5", True
+
     if V4_CHAT_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
         return V4_CHAT_MODEL_PATH, V4_TOKENIZER_PATH, "v4", True
     if V4_GROUNDED_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
@@ -159,7 +166,13 @@ def load_model():
 
     tokenizer = LocalTokenizer.load(tokenizer_path)
     checkpoint = torch.load(chosen, map_location=device, weights_only=False)
-    model_class = OrcaAIv4 if version == "v4" else LocalAI
+    model_class = (
+        OrcaAIv5
+        if version == "v5"
+        else OrcaAIv4
+        if version == "v4"
+        else LocalAI
+    )
     model = model_class(**checkpoint["config"]).to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
