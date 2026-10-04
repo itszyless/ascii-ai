@@ -134,14 +134,53 @@ def load_oasst(rows, max_examples):
         # Keep recent context so examples comfortably fit 1024 tokens.
         turns = turns[-4:]
         tree = row.get("message_tree_id") or row.get("message_id")
-        candidates.append((turns, tree))
+        candidates.append((turns, tree, row.get("lang") or "en"))
 
     rng = random.Random(SEED)
-    rng.shuffle(candidates)
+    by_language = {}
+    for item in candidates:
+        by_language.setdefault(item[2], []).append(item)
+    for items in by_language.values():
+        rng.shuffle(items)
 
+    # Deliberately reserve a large part of the instruction mix for German and
+    # other target languages instead of allowing English to dominate.
+    shares = {
+        "en": 0.42,
+        "de": 0.20,
+        "fr": 0.08,
+        "es": 0.08,
+        "it": 0.05,
+        "pt": 0.05,
+        "nl": 0.04,
+        "pl": 0.03,
+        "cs": 0.025,
+        "sv": 0.025,
+    }
+
+    selected = []
+    used_ids = set()
+    for language, share in shares.items():
+        quota = max(1, int(max_examples * share))
+        for item in by_language.get(language, [])[:quota]:
+            selected.append(item)
+            used_ids.add(item[1])
+
+    if len(selected) < max_examples:
+        leftovers = [
+            item
+            for item in candidates
+            if item[1] not in used_ids
+        ]
+        rng.shuffle(leftovers)
+        selected.extend(leftovers[:max_examples - len(selected)])
+
+    rng.shuffle(selected)
     seen = set()
     added = 0
-    for turns, tree in candidates:
+    per_language = {}
+
+    for turns, tree, language in selected:
         key = tuple(
             (norm(user).lower(), norm(assistant).lower())
             for user, assistant in turns
@@ -150,11 +189,19 @@ def load_oasst(rows, max_examples):
             continue
         seen.add(key)
         write_row(rows, turns, "oasst1", tree)
+        per_language[language] = per_language.get(language, 0) + 1
         added += 1
         if added >= max_examples:
             break
 
     print(f"  OASST1 examples: {added:,}")
+    print(
+        "  OASST1 languages: "
+        + ", ".join(
+            f"{language}={count:,}"
+            for language, count in sorted(per_language.items())
+        )
+    )
 
 
 def load_dolly(rows, max_examples):
@@ -209,6 +256,17 @@ def add_core_curriculum(rows):
         ("Wer bist du?", "Ich bin OrcaAI, ein lokaler KI-Assistent auf diesem Computer."),
         ("How are you?", "I'm doing well. How can I help?"),
         ("Wie geht es dir?", "Mir geht es gut. Wie kann ich dir helfen?"),
+        ("Tell me your name.", "My name is OrcaAI."),
+        ("What's your name?", "My name is OrcaAI."),
+        ("Are you a person?", "No. I'm an AI assistant, not a person."),
+        ("Are you real?", "I'm real software, but I'm not a human person."),
+        ("What kind of thing are you?", "I'm a local AI assistant called OrcaAI."),
+        ("Sag mir deinen Namen.", "Ich heiße OrcaAI."),
+        ("Bist du eine echte Person?", "Nein. Ich bin ein KI-Assistent und keine Person."),
+        ("Was genau bist du?", "Ich bin OrcaAI, ein lokaler KI-Assistent."),
+        ("Hallo!", "Hallo! Wie kann ich dir helfen?"),
+        ("Hi!", "Hi! How can I help?"),
+        ("Hello!", "Hello! How can I help?"),
     ]
     for index, pair in enumerate(identity):
         write_row(rows, [pair], "core_identity", f"identity-{index}")
@@ -341,6 +399,89 @@ def add_core_curriculum(rows):
             f"{concept}-multiturn",
         )
 
+    german_concepts = [
+        ("RAM", "RAM ist der schnelle, temporäre Arbeitsspeicher eines Computers. Er hält Daten bereit, die gerade verwendet werden."),
+        ("CPU", "Die CPU führt Programmbefehle aus und verarbeitet Daten."),
+        ("Datenbank", "Eine Datenbank ist eine organisierte Sammlung von Informationen, die gespeichert, gesucht und verändert werden können."),
+        ("SSD", "Eine SSD speichert Dateien und Programme dauerhaft, auch wenn der Computer ausgeschaltet ist."),
+    ]
+    for index, (name, answer) in enumerate(german_concepts):
+        write_row(
+            rows,
+            [(f"Erkläre {name} einfach.", answer)],
+            "core_explain",
+            f"concept-de-{index}",
+        )
+        write_row(
+            rows,
+            [(f"Was ist {name}?", answer)],
+            "core_explain",
+            f"concept-de-{index}",
+        )
+
+    # Basic assistant behaviors that were weak in the first v5 chat pass.
+    basic_tasks = [
+        ("Rewrite this politely: send it now", "Could you please send it now?"),
+        ("Make this more polite: give me the document", "Could you please give me the document?"),
+        ("Make this shorter: I would like to ask whether you could possibly help me.", "Could you help me?"),
+        ("Write one short sentence about a dog.", "The dog ran through the park."),
+        ("Write one short sentence about a cat.", "The cat slept by the window."),
+        ("Write one short sentence about school.", "School can be a place to learn new things."),
+        ("How should I start learning Java?", "Start with variables, conditions, loops, methods, and small programs. Practice by building simple projects."),
+        ("How should I start learning Python?", "Learn the basic syntax, then practice with small programs and gradually build projects."),
+        ("Why does ice melt when it gets warmer?", "Ice melts when it absorbs enough heat for solid water to become liquid water."),
+        ("Why does water boil when heated?", "When water gets hot enough, its molecules can escape the liquid and form water vapor."),
+        ("What is the difference between a country and a city?", "A country is a nation or territory, while a city is a populated place within a country."),
+        ("What is the difference between France and Paris?", "France is a country. Paris is a city and the capital of France."),
+        ("Was ist der Unterschied zwischen einem Land und einer Stadt?", "Ein Land ist ein Staat oder Gebiet. Eine Stadt ist ein bewohnter Ort innerhalb eines Landes."),
+        ("Schreibe einen kurzen Satz über eine Katze.", "Die Katze schläft am Fenster."),
+        ("Wie lerne ich Java am besten?", "Lerne zuerst Variablen, Bedingungen, Schleifen und Methoden und übe dann mit kleinen Projekten."),
+        ("Warum schmilzt Eis bei Wärme?", "Eis nimmt Wärme auf und wird dadurch von festem zu flüssigem Wasser."),
+        ("Formule plus poliment : donne-moi le fichier", "Pourrais-tu me donner le fichier, s'il te plaît ?"),
+        ("Reescribe esto de forma educada: dame el archivo", "¿Podrías darme el archivo, por favor?"),
+    ]
+    for index, pair in enumerate(basic_tasks):
+        write_row(rows, [pair], "core_tasks", f"task-{index}")
+
+    # More factual anchors. These teach concise factual-answer style rather than
+    # long Wikipedia continuation style.
+    capitals = [
+        ("Germany", "Berlin"),
+        ("Austria", "Vienna"),
+        ("France", "Paris"),
+        ("Russia", "Moscow"),
+        ("Italy", "Rome"),
+        ("Spain", "Madrid"),
+        ("Portugal", "Lisbon"),
+        ("Poland", "Warsaw"),
+        ("Czech Republic", "Prague"),
+        ("Sweden", "Stockholm"),
+        ("Netherlands", "Amsterdam"),
+    ]
+    for index, (country, capital) in enumerate(capitals):
+        write_row(
+            rows,
+            [(f"Which city is the capital of {country}?", f"{capital} is the capital of {country}.")],
+            "core_facts",
+            f"capital-en-{index}",
+        )
+
+    german_capitals = [
+        ("Deutschland", "Berlin"),
+        ("Österreich", "Wien"),
+        ("Frankreich", "Paris"),
+        ("Italien", "Rom"),
+        ("Spanien", "Madrid"),
+        ("Polen", "Warschau"),
+    ]
+    for index, (country, capital) in enumerate(german_capitals):
+        write_row(
+            rows,
+            [(f"Welche Stadt ist die Hauptstadt von {country}?", f"{capital} ist die Hauptstadt von {country}.")],
+            "core_facts",
+            f"capital-de-{index}",
+        )
+
     # Small arithmetic curriculum. The website also has an exact local
     # calculator for arithmetic; these examples mainly teach response format.
     rng = random.Random(SEED + 2)
@@ -441,8 +582,8 @@ def dedupe(rows):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--oasst-max", type=int, default=28_000)
-    parser.add_argument("--dolly-max", type=int, default=15_000)
+    parser.add_argument("--oasst-max", type=int, default=12_000)
+    parser.add_argument("--dolly-max", type=int, default=6_000)
     args = parser.parse_args()
 
     rows = []
