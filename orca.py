@@ -33,6 +33,9 @@ COMMANDS = {
     "test-v5": "test_v5.py",
     "prepare-v5-boost": "prepare_v5_boost.py",
     "boost-v5": "boost_v5.py",
+    "prepare-v5-chat": "prepare_v5_chat.py",
+    "finetune-v5": "finetune_v5.py",
+    "test-chat-v5": "test_chat_v5.py",
 }
 
 
@@ -63,6 +66,9 @@ def print_help():
         "test-v5": "interactive v5/boost base-model test",
         "prepare-v5-boost": "prepare multilingual + arithmetic continuation data",
         "boost-v5": "continue v5 on multilingual text and arithmetic",
+        "prepare-v5-chat": "build broad multilingual v5 instruction data",
+        "finetune-v5": "instruction/chat tune OrcaAI v5",
+        "test-chat-v5": "run held-out v5 chat sanity checks",
     }
     width = max(len(name) for name in COMMANDS)
     for name in COMMANDS:
