@@ -19,6 +19,10 @@ from tokenizer import LocalTokenizer
 
 CHECKPOINT = Path("checkpoints/chat_model_v5.pt")
 TOKENIZER = Path("checkpoints/tokenizer_v5.json")
+SYSTEM_PREFIX = (
+    "System: OrcaAI is a helpful local assistant. "
+    "Follow the user's instruction accurately and answer in the user's language.\n"
+)
 
 PROMPTS = [
     "Hello! What can you help me with?",
@@ -149,12 +153,12 @@ def build_history_prompt(history, tokenizer, context_length):
     current_user = history[-1][1]
     if len(history) == 1:
         ids = tokenizer.encode(
-            f"User: {current_user}\nAssistant:"
+            SYSTEM_PREFIX + f"User: {current_user}\nAssistant:"
         )
         return ids[-context_length:]
 
     recent = history[-5:]
-    token_ids = []
+    token_ids = tokenizer.encode(SYSTEM_PREFIX)
     pending_user = None
 
     for role, content in recent[:-1]:
@@ -226,7 +230,7 @@ def main():
     empty = 0
 
     for index, user_prompt in enumerate(PROMPTS, 1):
-        prompt = f"User: {user_prompt}\nAssistant:"
+        prompt = SYSTEM_PREFIX + f"User: {user_prompt}\nAssistant:"
         prompt_ids = tokenizer.encode(prompt)
         x = torch.tensor(
             [prompt_ids[-model.context_length:]],
