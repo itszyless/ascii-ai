@@ -592,6 +592,28 @@ def main():
     add_core_curriculum(rows)
 
     rows = dedupe(rows)
+
+    source_repeat = {
+        "core_identity": 80,
+        "core_format": 35,
+        "core_grammar": 30,
+        "core_explain": 40,
+        "core_tasks": 35,
+        "core_facts": 50,
+        "core_multiturn": 60,
+        "core_uncertainty": 40,
+        "core_math": 2,
+    }
+    expanded = []
+    for row in rows:
+        repeats = (
+            source_repeat.get(row["source"], 1)
+            if row["split"] == "train"
+            else 1
+        )
+        expanded.extend([row] * repeats)
+    rows = expanded
+
     rng = random.Random(SEED + 3)
     rng.shuffle(rows)
 
