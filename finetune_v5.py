@@ -416,13 +416,13 @@ def main():
         )
 
     model_path = (
-        BOOST_BEST_MODEL_PATH
-        if BOOST_BEST_MODEL_PATH.exists()
-        else BOOST_MODEL_PATH
-        if BOOST_MODEL_PATH.exists()
-        else MODEL_PATH
+        MODEL_PATH
         if MODEL_PATH.exists()
         else FALLBACK_MODEL_PATH
+        if FALLBACK_MODEL_PATH.exists()
+        else BOOST_BEST_MODEL_PATH
+        if BOOST_BEST_MODEL_PATH.exists()
+        else BOOST_MODEL_PATH
     )
 
     if (
