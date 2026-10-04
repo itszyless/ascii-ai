@@ -34,6 +34,10 @@ BATCH_SIZE = 1
 GRAD_ACCUM_STEPS = 4
 REPLAY_CONTEXT_LENGTH = 512
 CORE_TRAIN_REPEAT = 1
+SYSTEM_PREFIX = (
+    "System: OrcaAI is a helpful local assistant. "
+    "Follow the user's instruction accurately and answer in the user's language.\n"
+)
 LEARNING_RATE = 5e-6
 PRINT_EVERY = 20
 EVAL_EVERY = 200
@@ -192,8 +196,8 @@ def split_examples(examples):
 
 
 def make_example(turns, tokenizer, context_length):
-    token_ids = []
-    target_mask = []
+    token_ids = tokenizer.encode(SYSTEM_PREFIX)
+    target_mask = [False] * len(token_ids)
 
     for user, assistant in turns:
         prompt = tokenizer.encode(
