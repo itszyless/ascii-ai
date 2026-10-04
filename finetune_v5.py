@@ -544,54 +544,61 @@ def main():
         1,
         MAX_STEPS + 1,
     ):
-        x, labels = get_chat_batch(
-            train_examples,
-            tokenizer,
-            context_length,
-            device,
-        )
-
         optimizer.zero_grad(set_to_none=True)
+        accumulated_loss = 0.0
 
-        with torch.autocast(
-            device_type=device.type,
-            dtype=torch.bfloat16,
-            enabled=use_bf16,
-        ):
-            loss = chat_loss(
-                model,
-                x,
-                labels,
+        for _ in range(GRAD_ACCUM_STEPS):
+            x, labels = get_chat_batch(
+                train_examples,
+                tokenizer,
+                context_length,
+                device,
             )
-            combined_loss = loss
 
-            if step % BASE_REPLAY_EVERY == 0:
-                roll = random.random()
-                source = (
-                    multilingual
-                    if multilingual is not None and roll < 0.50
-                    else fineweb
-                    if fineweb is not None and roll < 0.85
-                    else wikipedia
+            with torch.autocast(
+                device_type=device.type,
+                dtype=torch.bfloat16,
+                enabled=use_bf16,
+            ):
+                loss = chat_loss(
+                    model,
+                    x,
+                    labels,
                 )
+                scaled_loss = loss / GRAD_ACCUM_STEPS
 
-                if source is not None:
-                    base_x, base_y = get_base_batch(
-                        source,
-                        min(context_length, REPLAY_CONTEXT_LENGTH),
-                        device,
-                    )
+            scaled_loss.backward()
+            accumulated_loss += loss.item() / GRAD_ACCUM_STEPS
+
+        if step % BASE_REPLAY_EVERY == 0:
+            roll = random.random()
+            source = (
+                multilingual
+                if multilingual is not None and roll < 0.35
+                else fineweb
+                if fineweb is not None and roll < 0.80
+                else wikipedia
+            )
+
+            if source is not None:
+                base_x, base_y = get_base_batch(
+                    source,
+                    min(context_length, REPLAY_CONTEXT_LENGTH),
+                    device,
+                )
+                with torch.autocast(
+                    device_type=device.type,
+                    dtype=torch.bfloat16,
+                    enabled=use_bf16,
+                ):
                     _, replay_loss = model(
                         base_x,
                         base_y,
                     )
-                    combined_loss = (
-                        loss
-                        + BASE_REPLAY_WEIGHT
-                        * replay_loss
-                    )
+                    replay_term = BASE_REPLAY_WEIGHT * replay_loss
+                replay_term.backward()
 
-        combined_loss.backward()
+        loss = torch.tensor(accumulated_loss, device=device)
         torch.nn.utils.clip_grad_norm_(
             model.parameters(),
             1.0,
