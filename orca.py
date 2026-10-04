@@ -36,6 +36,8 @@ COMMANDS = {
     "prepare-v5-chat": "prepare_v5_chat.py",
     "finetune-v5": "finetune_v5.py",
     "test-chat-v5": "test_chat_v5.py",
+    "train-v5-1": "train_v5_1.py",
+    "test-v5-1": "test_v5_1.py",
 }
 
 
@@ -69,6 +71,8 @@ def print_help():
         "prepare-v5-chat": "build broad multilingual v5 instruction data",
         "finetune-v5": "instruction/chat tune OrcaAI v5",
         "test-chat-v5": "run held-out v5 chat sanity checks",
+        "train-v5-1": "continue v5 on a cleaner multilingual semantic mix",
+        "test-v5-1": "run the standardized v5.1 semantic benchmark",
     }
     width = max(len(name) for name in COMMANDS)
     for name in COMMANDS:
