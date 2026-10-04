@@ -236,7 +236,8 @@ def should_use_history(user_prompt):
 def build_history_prompt(messages):
     current_user = str(messages[-1].get("content") or "").strip()
 
-    if not should_use_history(current_user):
+    is_v5_chat = _model_path == V5_CHAT_MODEL_PATH
+    if not is_v5_chat and not should_use_history(current_user):
         prompt_ids = _tokenizer.encode(
             f"User: {current_user}\nAssistant:"
         )
@@ -244,7 +245,7 @@ def build_history_prompt(messages):
 
     # Match the exact multi-turn format used during fine-tuning:
     # User prompt -> Assistant response -> EOS -> next User prompt.
-    recent = messages[-5:]
+    recent = messages[-7:]
     token_ids = []
     pending_user = None
 
