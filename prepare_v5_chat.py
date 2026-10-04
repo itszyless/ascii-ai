@@ -485,7 +485,7 @@ def add_core_curriculum(rows):
     # Small arithmetic curriculum. The website also has an exact local
     # calculator for arithmetic; these examples mainly teach response format.
     rng = random.Random(SEED + 2)
-    for index in range(2500):
+    for index in range(300):
         op = rng.choice(["+", "-", "*"])
         if op == "*":
             a = rng.randint(0, 99)
@@ -582,8 +582,8 @@ def dedupe(rows):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--oasst-max", type=int, default=12_000)
-    parser.add_argument("--dolly-max", type=int, default=6_000)
+    parser.add_argument("--oasst-max", type=int, default=8_000)
+    parser.add_argument("--dolly-max", type=int, default=3_000)
     args = parser.parse_args()
 
     rows = []
