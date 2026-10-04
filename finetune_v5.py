@@ -397,9 +397,9 @@ def main():
     random.seed(SEED)
     torch.manual_seed(SEED)
 
-    if not CHAT_PATH.exists():
+    if not CURATED_CHAT_PATH.exists() and not CHAT_PATH.exists():
         raise FileNotFoundError(
-            "Missing data/chat.txt."
+            "Missing v5 chat data. Run: py -3.12 orca.py prepare-v5-chat"
         )
 
     model_path = (
@@ -480,6 +480,8 @@ def main():
         device.type == "cuda"
         and torch.cuda.is_bf16_supported()
     )
+    if device.type == "cuda":
+        torch.set_float32_matmul_precision("high")
 
     model = OrcaAIv5(**config).to(device)
     model.load_state_dict(checkpoint["model_state"])
