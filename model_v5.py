@@ -290,6 +290,7 @@ class OrcaAIv5(nn.Module):
         repetition_window=96,
     ):
         self.eval()
+        prompt_length = token_ids.size(1)
 
         for _ in range(max_new_tokens):
             context = token_ids[:, -self.context_length:]
