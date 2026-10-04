@@ -30,6 +30,7 @@ CHAT_STORE = DATA_DIR / "web_chats.json"
 CHECKPOINT_DIR = ROOT / "checkpoints"
 V5_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v5.pt"
 V5_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v5.json"
+V5_WEB_MARKER = CHECKPOINT_DIR / "enable_v5_web"
 
 V4_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v4.pt"
 V4_GROUNDED_MODEL_PATH = CHECKPOINT_DIR / "model_v4_grounded.pt"
@@ -110,7 +111,11 @@ def checkpoint_signature(path):
 
 
 def choose_model():
-    if V5_CHAT_MODEL_PATH.exists() and V5_TOKENIZER_PATH.exists():
+    if (
+        V5_WEB_MARKER.exists()
+        and V5_CHAT_MODEL_PATH.exists()
+        and V5_TOKENIZER_PATH.exists()
+    ):
         return V5_CHAT_MODEL_PATH, V5_TOKENIZER_PATH, "v5", True
 
     if V4_CHAT_MODEL_PATH.exists() and V4_TOKENIZER_PATH.exists():
