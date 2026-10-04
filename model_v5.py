@@ -297,15 +297,17 @@ class OrcaAIv5(nn.Module):
             logits = logits[:, -1, :]
 
             if repetition_penalty and repetition_penalty > 1.0:
-                recent = token_ids[:, -repetition_window:]
-                for batch_index in range(token_ids.size(0)):
-                    used = torch.unique(recent[batch_index])
-                    scores = logits[batch_index, used]
-                    logits[batch_index, used] = torch.where(
-                        scores < 0,
-                        scores * repetition_penalty,
-                        scores / repetition_penalty,
-                    )
+                generated_so_far = token_ids[:, prompt_length:]
+                if generated_so_far.numel() > 0:
+                    recent = generated_so_far[:, -repetition_window:]
+                    for batch_index in range(token_ids.size(0)):
+                        used = torch.unique(recent[batch_index])
+                        scores = logits[batch_index, used]
+                        logits[batch_index, used] = torch.where(
+                            scores < 0,
+                            scores * repetition_penalty,
+                            scores / repetition_penalty,
+                        )
 
             logits = logits / max(temperature, 1e-5)
 
