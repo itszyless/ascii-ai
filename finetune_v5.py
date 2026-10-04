@@ -29,7 +29,7 @@ FALLBACK_MODEL_PATH = Path("checkpoints/model_v5.pt")
 TOKENIZER_PATH = Path("checkpoints/tokenizer_v5.json")
 OUTPUT_PATH = Path("checkpoints/chat_model_v5.pt")
 
-MAX_STEPS = 4000
+MAX_STEPS = 6000
 BATCH_SIZE = 1
 LEARNING_RATE = 1.5e-5
 PRINT_EVERY = 20
@@ -49,7 +49,7 @@ def normalize(text):
 
 
 
-def load_curated_examples(path):
+def load_curated_examples(path, split=None):
     if not path.exists():
         return []
 
@@ -60,7 +60,8 @@ def load_curated_examples(path):
             continue
         item = json.loads(line)
 
-        if item.get("split") == "val":
+        row_split = item.get("split")
+        if split is not None and row_split != split:
             continue
 
         turns = item.get("turns")
@@ -252,13 +253,17 @@ def get_chat_batch(
         k=BATCH_SIZE,
     )
 
+    batch_length = min(
+        context_length,
+        max(len(ids) for ids, _ in chosen),
+    )
     x = torch.full(
-        (BATCH_SIZE, context_length),
+        (BATCH_SIZE, batch_length),
         tokenizer.pad_id,
         dtype=torch.long,
     )
     labels = torch.full(
-        (BATCH_SIZE, context_length),
+        (BATCH_SIZE, batch_length),
         -100,
         dtype=torch.long,
     )
@@ -266,7 +271,7 @@ def get_chat_batch(
     for row, (ids, row_labels) in enumerate(chosen):
         length = min(
             len(ids),
-            context_length,
+            batch_length,
         )
         x[row, :length] = ids[:length]
         labels[row, :length] = row_labels[:length]
@@ -426,15 +431,22 @@ def main():
     config = checkpoint["config"]
     context_length = config["context_length"]
 
-    curated = load_curated_examples(
-        CURATED_CHAT_PATH
+    curated_train = load_curated_examples(
+        CURATED_CHAT_PATH,
+        "train",
+    )
+    curated_val = load_curated_examples(
+        CURATED_CHAT_PATH,
+        "val",
     )
 
-    if curated:
-        # Use the curated dataset alone for this refinement pass.
-        balanced = curated
+    if curated_train and curated_val:
+        train_raw = curated_train
+        val_raw = curated_val
+        balanced = train_raw + val_raw
         rng = random.Random(SEED)
-        rng.shuffle(balanced)
+        rng.shuffle(train_raw)
+        rng.shuffle(val_raw)
     else:
         conversations = parse_conversations(
             CHAT_PATH.read_text(
@@ -442,10 +454,9 @@ def main():
             )
         )
         balanced = rebalance(conversations)
-
-    train_raw, val_raw = split_examples(
-        balanced
-    )
+        train_raw, val_raw = split_examples(
+            balanced
+        )
 
     train_examples = build_examples(
         train_raw,
