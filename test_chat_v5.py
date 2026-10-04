@@ -147,7 +147,7 @@ def should_use_history(user_prompt):
 
 def build_history_prompt(history, tokenizer, context_length):
     current_user = history[-1][1]
-    if not should_use_history(current_user):
+    if len(history) == 1:
         ids = tokenizer.encode(
             f"User: {current_user}\nAssistant:"
         )
