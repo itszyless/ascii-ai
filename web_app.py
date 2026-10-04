@@ -31,6 +31,10 @@ CHECKPOINT_DIR = ROOT / "checkpoints"
 V5_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v5.pt"
 V5_TOKENIZER_PATH = CHECKPOINT_DIR / "tokenizer_v5.json"
 V5_WEB_MARKER = CHECKPOINT_DIR / "enable_v5_web"
+V5_SYSTEM_PREFIX = (
+    "System: OrcaAI is a helpful local assistant. "
+    "Follow the user's instruction accurately and answer in the user's language.\n"
+)
 
 V4_CHAT_MODEL_PATH = CHECKPOINT_DIR / "chat_model_v4.pt"
 V4_GROUNDED_MODEL_PATH = CHECKPOINT_DIR / "model_v4_grounded.pt"
@@ -251,7 +255,11 @@ def build_history_prompt(messages):
     # Match the exact multi-turn format used during fine-tuning:
     # User prompt -> Assistant response -> EOS -> next User prompt.
     recent = messages[-7:]
-    token_ids = []
+    token_ids = (
+        _tokenizer.encode(V5_SYSTEM_PREFIX)
+        if is_v5_chat
+        else []
+    )
     pending_user = None
 
     for message in recent[:-1]:
